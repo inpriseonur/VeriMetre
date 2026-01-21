@@ -1,5 +1,4 @@
 import InflationChart from '@/components/InflationChart';
-import LivingStandardsChart from '@/components/LivingStandardsChart';
 import { supabase } from '@/lib/supabase';
 import { ExchangeRates, fetchExchangeRates } from '@/lib/tcmb';
 import { ViewInflationCalculated, ViewLivingStandards } from '@/types/database';
@@ -126,7 +125,6 @@ export default function DashboardScreen() {
         {/* --- Advanced Inflation Chart --- */}
         <View className="mb-24">
           <InflationChart data={inflationData} loading={loading} />
-          <LivingStandardsChart data={livingStandardsData} loading={loading} />
         </View>
 
       </ScrollView>
