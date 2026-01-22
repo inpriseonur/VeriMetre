@@ -150,8 +150,8 @@ export default function InflationChart({ data, loading }: InflationChartProps) {
     return (
         <View className="bg-slate-800 rounded-2xl p-4 shadow-sm shadow-black border border-slate-700 w-full">
             {/* Header & Toggle */}
-            <View className="flex-row items-center justify-between mb-6">
-                <Text className="text-white text-lg font-semibold">Enflasyon Oranı</Text>
+            <View className="flex-row items-center justify-end mb-6">
+                {/* Title removed */}
 
                 {/* Simple Segmented Control */}
                 <View className="flex-row bg-slate-900 rounded-lg p-1 border border-slate-700">

@@ -4,13 +4,13 @@ import axios from 'axios';
 const TCMB_API_KEY = process.env.EXPO_PUBLIC_TCMB_API_KEY;
 const MAX_RETRIES = 5;
 
-// Sadece Dövizleri TCMB'den istiyoruz (Altını sildik buradan)
+// Sadece Dövizleri TCMB'den istiyoruz
 const TCMB_SERIES = 'TP.DK.USD.S.YTL-TP.DK.EUR.S.YTL';
 
 export interface ExchangeRates {
-    USD: number | null;
-    EUR: number | null;
-    Gold: number | null;
+    USD: { price: number; rate: number } | null;
+    EUR: { price: number; rate: number } | null;
+    Gold: { price: number; rate: number } | null;
     BIST100: { price: string; rate: number } | null;
     Date: string;
 }
@@ -28,86 +28,68 @@ const getPreviousDate = (date: Date): Date => {
     return prev;
 };
 
-// YARDIMCI: Ücretsiz Altın Verisi (Truncgil API - Daha Sağlam)
-const fetchFreeGoldPrice = async (): Promise<number | null> => {
+// YARDIMCI: Ücretsiz Altın Verisi (Truncgil API)
+const fetchFreeGoldPrice = async (): Promise<{ price: number; rate: number } | null> => {
     try {
-        // Türkiye'nin en popüler açık kaynak finans API'si
         const response = await axios.get('https://finans.truncgil.com/today.json');
-
-        // Veri yapısı: response.data['gram-altin'].Selling (veya 'Satis')
         const goldData = response.data['gram-altin'];
 
-        // API keys are Turkish: Alış, Satış, Tür, Değişim
         if (goldData && goldData.Satış) {
-            console.log("Altın Verisi (Truncgil):", goldData.Satış);
-
-            // GELEN VERİ FORMATI:String "3.020,45" şeklinde geliyor.
-            // ÖNCE: Binlik ayracı olan noktayı (.) siliyoruz -> "3020,45"
-            // SONRA: Ondalık ayracı olan virgülü (,) noktaya (.) çeviriyoruz -> "3020.45"
             const cleanValue = goldData.Satış.replace(/\./g, '').replace(',', '.');
+            const price = parseFloat(cleanValue);
 
-            return parseFloat(cleanValue);
+            // Parse Change Rate (% Değişim)
+            let rate = 0;
+            // Truncgil "Değişim" field might be like "%0,45" or "0,45"
+            if (goldData.Değişim) {
+                const cleanRate = goldData.Değişim.replace('%', '').replace(',', '.');
+                rate = parseFloat(cleanRate);
+            }
+
+            return { price, rate };
         }
         return null;
     } catch (error) {
-        console.log("Altın servisi (Truncgil) yanıt vermedi:", error);
+        console.log("Altın servisi hatası:", error);
         return null;
     }
 };
 
-// YARDIMCI: BIST 100 Verisi (Yahoo Finance Public API)
-// Not: Yahoo Finance verileri genelde 15 dk gecikmeli olabilir (Borsa kuralı gereği)
-
-// CACHE VARIABLES
+// YARDIMCI: BIST 100 Verisi (Yahoo Finance)
 let cachedBistData: { price: string; rate: number } | null = null;
 let lastFetchTime: number = 0;
-const CACHE_DURATION = 15 * 60 * 1000; // 15 Minutes
+const CACHE_DURATION = 15 * 60 * 1000;
 
 export const fetchBistData = async (): Promise<{ price: string; rate: number } | null> => {
-    // 1. Check Cache
     const now = Date.now();
     if (cachedBistData && (now - lastFetchTime) < CACHE_DURATION) {
-        // console.log("Serving BIST Data from Cache");
         return cachedBistData;
     }
 
     try {
-        // Yahoo Finance BIST 100 Sembolü: XU100.IS
         const url = 'https://query1.finance.yahoo.com/v8/finance/chart/XU100.IS?interval=1d&range=1d';
-
         const response = await axios.get(url);
         const result = response.data?.chart?.result?.[0];
 
         if (result && result.meta) {
-            // Son kapanış/işlem fiyatı
             const currentPrice = result.meta.regularMarketPrice;
-            // Bir önceki kapanış (Değişimi hesaplamak için)
             const previousClose = result.meta.chartPreviousClose;
-
-            // Yüzdelik Değişim Hesabı
             let changeRate = 0;
             if (currentPrice && previousClose) {
                 changeRate = ((currentPrice - previousClose) / previousClose) * 100;
             }
 
-            // Update Cache
             cachedBistData = {
-                price: currentPrice.toLocaleString('tr-TR', { maximumFractionDigits: 0 }), // Örn: 9.150
-                rate: changeRate // Örn: 1.5 (Pozitif veya negatif)
+                price: currentPrice.toLocaleString('tr-TR', { maximumFractionDigits: 0 }),
+                rate: changeRate
             };
             lastFetchTime = now;
-
             return cachedBistData;
         }
-
-        // If API fails but we have stale cache, decide whether to return stale data or null.
-        // For now, let's fallback to cache if available
         if (cachedBistData) return cachedBistData;
-
         return null;
     } catch (error) {
         console.log("BIST verisi alınamadı:", error);
-        // Fallback to cache on error if exists
         if (cachedBistData) return cachedBistData;
         return null;
     }
@@ -118,45 +100,65 @@ export const fetchExchangeRates = async (
     retryCount: number = 0
 ): Promise<ExchangeRates | null> => {
 
-    // 1. ADIM: Önce Altın ve BIST Fiyatını "Piyasadan" Çek
-    let goldPrice = await fetchFreeGoldPrice();
-    let bistData = await fetchBistData();
+    const goldData = await fetchFreeGoldPrice();
+    const bistData = await fetchBistData();
 
     if (!TCMB_API_KEY) return null;
     if (retryCount > MAX_RETRIES) return null;
 
-    const dateStr = formatDate(date);
+    // Fetch Today AND Yesterday to calculate change
+    const endDateStr = formatDate(date);
+    const startDateStr = formatDate(getPreviousDate(date)); // Get 2 days range
 
-    // 2. ADIM: Dolar ve Euro'yu TCMB'den Çek
-    const url = `https://evds2.tcmb.gov.tr/service/evds/series=${TCMB_SERIES}&startDate=${dateStr}&endDate=${dateStr}&type=json`;
+    // Note: TCMB range endpoint allows fetching multiple days
+    const url = `https://evds2.tcmb.gov.tr/service/evds/series=${TCMB_SERIES}&startDate=${startDateStr}&endDate=${endDateStr}&type=json`;
 
     try {
         const response = await axios.get(url, { headers: { key: TCMB_API_KEY } });
         const items = response.data?.items;
 
-        if (items && items.length > 0 && items[0]) {
-            const item = items[0];
-            const usdVal = item['TP_DK_USD_S_YTL'];
-            const eurVal = item['TP_DK_EUR_S_YTL'];
+        if (items && items.length > 0) {
+            // items array should have 1 or 2 entries depending on weekend/holiday gaps
+            // Sort by date just to be safe (although acts usually returns chronological)
+            // But we can just find the latest valid entry and the one before it.
 
-            // Eğer Dolar yoksa (Hafta sonuysa), dünü dene
-            if (!usdVal) {
+            // We need "Today's" value (or latest available) and "Previous" value
+            // Since TCMB might skip weekends in range query, we just take the last two items.
+
+            const latestItem = items[items.length - 1];
+            const previousItem = items.length > 1 ? items[items.length - 2] : null;
+
+            if (!latestItem || !latestItem['TP_DK_USD_S_YTL']) {
+                // Latest date has no data? Try going back one more day via recursion
                 return fetchExchangeRates(getPreviousDate(date), retryCount + 1);
             }
 
+            const usdNow = parseFloat(latestItem['TP_DK_USD_S_YTL']);
+            const eurNow = parseFloat(latestItem['TP_DK_EUR_S_YTL']);
+
+            let usdRate = 0;
+            let eurRate = 0;
+
+            if (previousItem && previousItem['TP_DK_USD_S_YTL']) {
+                const usdPrev = parseFloat(previousItem['TP_DK_USD_S_YTL']);
+                const eurPrev = parseFloat(previousItem['TP_DK_EUR_S_YTL']);
+
+                usdRate = ((usdNow - usdPrev) / usdPrev) * 100;
+                eurRate = ((eurNow - eurPrev) / eurPrev) * 100;
+            }
+
             return {
-                USD: parseFloat(usdVal),
-                EUR: parseFloat(eurVal),
-                Gold: goldPrice ? goldPrice : 0,
-                BIST100: bistData, // New field (Syncs with updated Interface)
-                Date: dateStr,
+                USD: { price: usdNow, rate: usdRate },
+                EUR: { price: eurNow, rate: eurRate },
+                Gold: goldData,
+                BIST100: bistData,
+                Date: latestItem['Tarih'] || endDateStr,
             };
         } else {
-            // TCMB boş döndüyse dünü dene
+            // No data found in range, try going back
             return fetchExchangeRates(getPreviousDate(date), retryCount + 1);
         }
     } catch (error) {
-        // TCMB patlarsa dünü dene
         return fetchExchangeRates(getPreviousDate(date), retryCount + 1);
     }
 };

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Building, House, Wallet } from 'lucide-react-native';
+import { BarChart3, Building, Car, House } from 'lucide-react-native';
 import React from 'react';
 import { Platform } from 'react-native';
 
@@ -33,22 +33,35 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Ana Sayfa',
           tabBarIcon: ({ color }) => <House size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="purchasing-power"
+        name="markets"
         options={{
-          title: 'Purchasing Power',
-          tabBarIcon: ({ color }) => <Wallet size={24} color={color} />,
+          title: 'Piyasalar',
+          tabBarIcon: ({ color }) => <BarChart3 size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="real-estate"
         options={{
-          title: 'Real Estate',
+          title: 'Emlak',
           tabBarIcon: ({ color }) => <Building size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="auto"
+        options={{
+          title: 'Otomobil',
+          tabBarIcon: ({ color }) => <Car size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="purchasing-power"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>
