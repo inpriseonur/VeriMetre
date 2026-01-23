@@ -1,4 +1,4 @@
-import { AutoPageHeaderStats, AutoSalesHistoryItem, FuelAnalysisItem, getAutoPageHeader, getFuelAnalysis, getSalesHistory } from '@/lib/autoService';
+import { AutoPageHeaderStats, AutoSalesHistoryItem, BrandAnalysis, FuelAnalysisResponse, getAutoPageHeader, getBrandAnalysis, getFuelAnalysis, getSalesHistory } from '@/lib/autoService';
 import { BarChart3, Calendar, ChevronDown, ChevronUp, Layers, TrendingDown, TrendingUp, Zap } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Modal, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
@@ -13,13 +13,17 @@ export default function AutoScreen() {
 
     // Data States
     const [headerStats, setHeaderStats] = useState<AutoPageHeaderStats | null>(null);
-    const [fuelItems, setFuelItems] = useState<FuelAnalysisItem[]>([]);
-    const [fuelDate, setFuelDate] = useState<string | null>(null);
+    const [fuelAnalysis, setFuelAnalysis] = useState<FuelAnalysisResponse | null>(null);
+    const [brandAnalysis, setBrandAnalysis] = useState<BrandAnalysis | null>(null);
     const [historyData, setHistoryData] = useState<AutoSalesHistoryItem[]>([]);
 
-    // Filter State
-    const [filter, setFilter] = useState<'1Y' | '7Y'>('1Y');
-    const [isMaximized, setIsMaximized] = useState(false);
+    // Filter States
+    const [fuelWarFilter, setFuelWarFilter] = useState<'MONTH' | 'YEAR'>('MONTH');
+    const [fuelWarTab, setFuelWarTab] = useState<'FUEL' | 'BRAND'>('FUEL');
+
+    // Historical Trend Filter
+    const [trendFilter, setTrendFilter] = useState<'1Y' | '7Y'>('1Y');
+    const [isTrendMaximized, setIsTrendMaximized] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -28,10 +32,11 @@ export default function AutoScreen() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [headerRes, fuelRes, historyRes] = await Promise.all([
+            const [headerRes, fuelRes, historyRes, brandRes] = await Promise.all([
                 getAutoPageHeader(),
                 getFuelAnalysis(),
-                getSalesHistory()
+                getSalesHistory(),
+                getBrandAnalysis()
             ]);
 
             if (headerRes && headerRes.data) {
@@ -39,12 +44,15 @@ export default function AutoScreen() {
             }
 
             if (fuelRes && fuelRes.data) {
-                setFuelItems(fuelRes.data.items || []);
-                setFuelDate(fuelRes.data.reference_date);
+                setFuelAnalysis(fuelRes.data);
             }
 
             if (historyRes && historyRes.data) {
                 setHistoryData(historyRes.data);
+            }
+
+            if (brandRes && brandRes.data) {
+                setBrandAnalysis(brandRes.data);
             }
 
         } catch (error) {
@@ -73,18 +81,40 @@ export default function AutoScreen() {
         }
     };
 
-    // Helper: Prepare Chart Data based on Filter
+    // --- Helper: Get Current Fuel Data (Month vs Year) ---
+    const getCurrentFuelData = () => {
+        if (!fuelAnalysis) return null;
+        return fuelWarFilter === 'MONTH' ? fuelAnalysis.monthly : fuelAnalysis.yearly;
+    };
+
+    const currentFuelData = getCurrentFuelData();
+
+    // Helper for Pie Chart Data
+    const getPieData = () => {
+        const colors = ['#22c55e', '#ef4444', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#64748b'];
+        const items = currentFuelData?.items || [];
+        return items.map((item, index) => ({
+            value: item.share_percent,
+            color: colors[index % colors.length],
+        }));
+    };
+
+    // Helper to get color for a fuel
+    const getFuelColor = (index: number) => {
+        const colors = ['#22c55e', '#ef4444', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#64748b'];
+        return colors[index % colors.length];
+    };
+
+    // --- Helper: Prepare Historical Trend Chart Data ---
     const getChartData = () => {
         if (!historyData || historyData.length === 0) return [];
 
         let processedData = [];
 
-        if (filter === '1Y') {
-            // Last 12 Months
-            // HISTORY is sorted ASC (Old -> New).
-            // User wants: Newest on LEFT. (Reverse Chronological)
-            const sliced = historyData.slice(-12); // Get last 12
-            const reversed = sliced.reverse(); // Newest first
+        if (trendFilter === '1Y') {
+            // Last 12 Months - Reversed (Newest on Left)
+            const sliced = historyData.slice(-12);
+            const reversed = sliced.reverse();
 
             processedData = reversed.map(item => ({
                 value: item.quantity,
@@ -94,7 +124,6 @@ export default function AutoScreen() {
             }));
         } else {
             // 7Y Aggregation (Yearly Totals)
-            // Group by Year
             const yearlyMap = new Map<number, number>();
             historyData.forEach(item => {
                 const year = new Date(item.reference_date).getFullYear();
@@ -102,31 +131,25 @@ export default function AutoScreen() {
                 yearlyMap.set(year, current + item.quantity);
             });
 
-            // Convert map to array and take last 7 years
             const years = Array.from(yearlyMap.keys()).sort((a, b) => a - b);
             const last7Years = years.slice(-7);
-
-            // Also reverse for consistency (Newest Year on Left)
             const reversedYears = last7Years.reverse();
 
             processedData = reversedYears.map(year => ({
                 value: yearlyMap.get(year) || 0,
                 label: year.toString(),
-                date: `${year}-01-01`, // Dummy date for reference
-                displayLabel: year.toString() // For tooltip
+                date: `${year}-01-01`,
+                displayLabel: year.toString()
             }));
         }
 
         return processedData.map((item, index) => {
-            // For Reverse Chronological, "Last Point" logically usually means "Latest Data"
-            // Since we reversed, index 0 is the Latest Data.
-            // If we want the pulse on the latest data (which is now on the left), index === 0.
             const isLatest = index === 0;
 
             return {
                 ...item,
                 labelTextStyle: { color: 'gray', fontSize: 10 },
-                customDataPoint: isLatest && filter === '1Y' ? () => (
+                customDataPoint: isLatest && trendFilter === '1Y' ? () => (
                     <View
                         style={{
                             width: 12,
@@ -149,23 +172,6 @@ export default function AutoScreen() {
 
     const chartData = getChartData();
 
-    // Helper for Pie Chart Data
-    const getPieData = () => {
-        const colors = ['#22c55e', '#ef4444', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#64748b'];
-        return (fuelItems || []).map((item, index) => ({
-            value: item.share_percent,
-            color: colors[index % colors.length],
-            // text prop removed to keep chart clean
-        }));
-    };
-
-    // Helper to get color for a fuel
-    const getFuelColor = (index: number) => {
-        const colors = ['#22c55e', '#ef4444', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#64748b'];
-        return colors[index % colors.length];
-    };
-
-    // Format Time for "Son Güncelleme"
     const now = new Date();
     const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
@@ -192,7 +198,7 @@ export default function AutoScreen() {
             width={width}
             height={height}
             pointerConfig={{
-                pointerStripHeight: height, // Dynamic height
+                pointerStripHeight: height,
                 pointerStripColor: 'lightgray',
                 pointerStripWidth: 2,
                 pointerColor: 'lightgray',
@@ -232,12 +238,12 @@ export default function AutoScreen() {
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
             {/* Full Screen Modal */}
-            <Modal visible={isMaximized} transparent={true} animationType="fade">
+            <Modal visible={isTrendMaximized} transparent={true} animationType="fade">
                 <View className="flex-1 bg-black/90 justify-center items-center">
                     {/* Rotate Container for Landscape Simulation */}
                     <View
                         style={{
-                            width: Dimensions.get('window').height, // Swap width/height
+                            width: Dimensions.get('window').height,
                             height: Dimensions.get('window').width,
                             transform: [{ rotate: '90deg' }],
                             backgroundColor: '#0B1121',
@@ -245,8 +251,8 @@ export default function AutoScreen() {
                         }}
                     >
                         <View className="flex-row justify-between items-center mb-4">
-                            <Text className="text-white text-xl font-bold">Tarihsel Trend ({filter})</Text>
-                            <TouchableOpacity onPress={() => setIsMaximized(false)} className="bg-slate-800 p-2 rounded-lg">
+                            <Text className="text-white text-xl font-bold">Tarihsel Trend ({trendFilter})</Text>
+                            <TouchableOpacity onPress={() => setIsTrendMaximized(false)} className="bg-slate-800 p-2 rounded-lg">
                                 <Text className="text-white font-bold">Kapat ✕</Text>
                             </TouchableOpacity>
                         </View>
@@ -370,80 +376,229 @@ export default function AutoScreen() {
 
                 {/* --- Yakıt Savaşları (Fuel Wars) --- */}
                 <View className="mb-8 bg-slate-800/20 rounded-3xl p-5 border border-white/5">
-                    <Text className="text-white text-lg font-bold mb-4">Yakıt Savaşları</Text>
+                    <View className="flex-row justify-between items-center mb-6">
+                        <View className="flex-row items-center gap-4">
+                            <Text className="text-white text-lg font-bold">Pazar Analizi</Text>
 
-                    {loading && fuelItems.length === 0 ? (
-                        <View className="h-40 items-center justify-center">
-                            <Text className="text-slate-600">Yükleniyor...</Text>
-                        </View>
-                    ) : fuelItems.length === 0 ? (
-                        <View className="h-40 items-center justify-center">
-                            <Text className="text-slate-500">Bu dönem için veri bulunamadı.</Text>
-                        </View>
-                    ) : (
-                        <View className="flex-col md:flex-row gap-6">
-                            {/* A) Donut Chart */}
-                            <View className="items-center justify-center py-2">
-                                <PieChart
-                                    data={getPieData()}
-                                    donut
-                                    radius={80}
-                                    innerRadius={60}
-                                    innerCircleColor="#151C2F" // Dark background matching card using hex
-                                    centerLabelComponent={() => {
-                                        return (
-                                            <View className="items-center justify-center">
-                                                <Text className="text-slate-400 text-[10px] font-medium uppercase">VERİ DÖNEMİ</Text>
-                                                <Text className="text-white text-xl font-bold">{getMonthName(fuelDate || '')}</Text>
-                                            </View>
-                                        );
-                                    }}
-                                />
+                            {/* Main Type Toggle */}
+                            <View className="flex-row bg-slate-800 rounded-lg p-0.5">
+                                <TouchableOpacity
+                                    onPress={() => setFuelWarTab('FUEL')}
+                                    className={`px-3 py-1 rounded-md ${fuelWarTab === 'FUEL' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                >
+                                    <Text className={`text-xs font-bold ${fuelWarTab === 'FUEL' ? 'text-white' : 'text-slate-400'}`}>Yakıt</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setFuelWarTab('BRAND')}
+                                    className={`px-3 py-1 rounded-md ${fuelWarTab === 'BRAND' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                >
+                                    <Text className={`text-xs font-bold ${fuelWarTab === 'BRAND' ? 'text-white' : 'text-slate-400'}`}>Markalar</Text>
+                                </TouchableOpacity>
                             </View>
+                        </View>
 
-                            {/* B) Rich List - SINGLE LINE ALIGNED LAYOUT */}
-                            <View className="flex-1 gap-2">
-                                {fuelItems.map((item, index) => (
-                                    <View key={item.fuel_name} className="flex-row items-center justify-between py-1">
-                                        {/* Main Content (Left Aligned Columns) */}
-                                        <View className="flex-row items-center flex-1 mr-2">
+                        {/* Period Toggle - Only for FUEL mode */}
+                        {fuelWarTab === 'FUEL' && (
+                            <View className="flex-row bg-slate-800 rounded-lg p-1">
+                                <TouchableOpacity
+                                    onPress={() => setFuelWarFilter('MONTH')}
+                                    className={`px-3 py-1 rounded-md ${fuelWarFilter === 'MONTH' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                >
+                                    <Text className={`text-xs font-bold ${fuelWarFilter === 'MONTH' ? 'text-white' : 'text-slate-400'}`}>Ay</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setFuelWarFilter('YEAR')}
+                                    className={`px-3 py-1 rounded-md ${fuelWarFilter === 'YEAR' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                >
+                                    <Text className={`text-xs font-bold ${fuelWarFilter === 'YEAR' ? 'text-white' : 'text-slate-400'}`}>Yıl</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
 
-                                            {/* Col 1: Dot + Name (Width 80px) */}
-                                            <View className="flex-row items-center w-[70px] gap-2">
-                                                <View className="w-2 h-2 rounded-full" style={{ backgroundColor: getFuelColor(index) }} />
-                                                <Text className="text-white font-medium text-xs" numberOfLines={1}>{item.fuel_name}</Text>
+                    {fuelWarTab === 'FUEL' ? (
+
+                        loading && !currentFuelData ? (
+                            <View className="h-40 items-center justify-center">
+                                <Text className="text-slate-600">Yükleniyor...</Text>
+                            </View>
+                        ) : !currentFuelData ? (
+                            <View className="h-40 items-center justify-center">
+                                <Text className="text-slate-500">Veri bulunamadı.</Text>
+                            </View>
+                        ) : (
+                            <View className="flex-col md:flex-row gap-6">
+                                {/* A) Donut Chart */}
+                                <View className="items-center justify-center py-2">
+                                    <PieChart
+                                        data={getPieData()}
+                                        donut
+                                        radius={80}
+                                        innerRadius={60}
+                                        innerCircleColor="#151C2F"
+                                        centerLabelComponent={() => {
+                                            // FORMAT: Custom format based on Dashboard Reference Date
+                                            let centerText = '';
+                                            if (headerStats?.monthly_card?.reference_date) {
+                                                const dateObj = new Date(headerStats.monthly_card.reference_date);
+                                                if (fuelWarFilter === 'MONTH') {
+                                                    // Uppercase Turkish Month Name: ARALIK
+                                                    centerText = dateObj.toLocaleString('tr-TR', { month: 'long' }).toLocaleUpperCase('tr-TR');
+                                                } else {
+                                                    // Just Year: 2025
+                                                    centerText = dateObj.getFullYear().toString();
+                                                }
+                                            } else {
+                                                // Fallback
+                                                centerText = currentFuelData.label || '';
+                                            }
+
+                                            return (
+                                                <View className="items-center justify-center w-24">
+                                                    <Text className="text-slate-400 text-[10px] font-medium uppercase text-center">VERİ DÖNEMİ</Text>
+                                                    {/* Allow 2 lines if needed */}
+                                                    <Text className="text-white text-xl font-bold text-center" numberOfLines={2}>{centerText}</Text>
+                                                </View>
+                                            );
+                                        }}
+                                    />
+                                </View>
+
+                                {/* B) Rich List - SINGLE LINE ALIGNED LAYOUT */}
+                                <View className="flex-1 gap-2">
+                                    {currentFuelData.items.map((item, index) => (
+                                        <View key={item.fuel_name} className="flex-row items-center justify-between py-1">
+                                            {/* Main Content (Left Aligned Columns) */}
+                                            <View className="flex-row items-center flex-1 mr-2">
+
+                                                {/* Col 1: Dot + Name (Width 80px) */}
+                                                <View className="flex-row items-center w-[70px] gap-2">
+                                                    <View className="w-2 h-2 rounded-full" style={{ backgroundColor: getFuelColor(index) }} />
+                                                    <Text className="text-white font-medium text-xs" numberOfLines={1}>{item.fuel_name}</Text>
+                                                </View>
+
+                                                {/* Col 2: Sales (Width 60px - Right Aligned or Fixed) */}
+                                                <View className="w-[50px] items-end mr-3">
+                                                    <Text className="text-slate-400 text-[10px]">{formatNumber(item.sales_count)}</Text>
+                                                </View>
+
+                                                {/* Col 3: Percent (Width 40px) */}
+                                                <View className="w-[40px]">
+                                                    <Text className="text-slate-300 text-xs font-bold">%{item.share_percent}</Text>
+                                                </View>
+
+                                                {/* Col 4: Bar (Flex) */}
+                                                <View className="flex-1 h-1 bg-slate-700/50 rounded-full overflow-hidden max-w-[50px]">
+                                                    <View
+                                                        className="h-full rounded-full"
+                                                        style={{ width: `${item.share_percent}%`, backgroundColor: getFuelColor(index) }}
+                                                    />
+                                                </View>
                                             </View>
 
-                                            {/* Col 2: Sales (Width 60px - Right Aligned or Fixed) */}
-                                            <View className="w-[50px] items-end mr-3">
-                                                <Text className="text-slate-400 text-[10px]">{formatNumber(item.sales_count)}</Text>
-                                            </View>
-
-                                            {/* Col 3: Percent (Width 40px) */}
-                                            <View className="w-[40px]">
-                                                <Text className="text-slate-300 text-xs font-bold">%{item.share_percent}</Text>
-                                            </View>
-
-                                            {/* Col 4: Bar (Flex) */}
-                                            <View className="flex-1 h-1 bg-slate-700/50 rounded-full overflow-hidden max-w-[50px]">
-                                                <View
-                                                    className="h-full rounded-full"
-                                                    style={{ width: `${item.share_percent}%`, backgroundColor: getFuelColor(index) }}
-                                                />
-                                            </View>
+                                            {/* Right Side: Trend Badge (Conditional) */}
+                                            {Math.abs(item.change_rate) > 0 ? (
+                                                <View className={`px-2 py-1 rounded-lg flex-row items-center gap-1 ${item.direction === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'} w-[60px] justify-center`}>
+                                                    {item.direction === 'up' ? <ChevronUp size={10} color="#22c55e" /> : <ChevronDown size={10} color="#ef4444" />}
+                                                    <Text className={`text-[10px] font-bold ${item.direction === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                                                        %{Math.abs(item.change_rate)}
+                                                    </Text>
+                                                </View>
+                                            ) : (
+                                                // Empty Space to maintain alignment if no trend -> EXACT SAME SIZE AS BADGE
+                                                <View className="px-2 py-1 rounded-lg flex-row items-center gap-1 w-[60px] justify-center opacity-0">
+                                                    <Text className="text-[10px] font-bold">%0</Text>
+                                                </View>
+                                            )}
                                         </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )) : (
+                        /* --- NEW BRAND VIEW --- */
+                        loading && !brandAnalysis ? (
+                            <View className="h-40 items-center justify-center">
+                                <Text className="text-slate-600">Marka verileri yükleniyor...</Text>
+                            </View>
+                        ) : !brandAnalysis ? (
+                            <View className="h-40 items-center justify-center">
+                                <Text className="text-slate-500">Marka verisi bulunamadı.</Text>
+                            </View>
+                        ) : (
+                            <View className="px-1">
+                                {/* 1. Market Summary (Progress Bars) */}
+                                <View className="mb-6 p-4 bg-slate-800/40 rounded-xl">
+                                    <View className="flex-row justify-between mb-3">
+                                        <Text className="text-white text-sm font-bold">Yerli / İthal Pazar Dağılımı</Text>
+                                        <Text className="text-slate-400 text-xs">{new Date(brandAnalysis.reference_date).toLocaleString('tr-TR', { month: 'long' }).toLocaleUpperCase('tr-TR')}</Text>
+                                    </View>
 
-                                        {/* Right Side: Trend Badge (Unchanged) */}
-                                        <View className={`px-2 py-1 rounded-lg flex-row items-center gap-1 ${item.direction === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'} w-[60px] justify-center`}>
-                                            {item.direction === 'up' ? <ChevronUp size={10} color="#22c55e" /> : <ChevronDown size={10} color="#ef4444" />}
-                                            <Text className={`text-[10px] font-bold ${item.direction === 'up' ? 'text-green-500' : 'text-red-500'}`}>
-                                                %{Math.abs(item.change_rate)}
-                                            </Text>
+                                    <View className="flex-row items-center h-6 rounded-full overflow-hidden bg-slate-900 border border-slate-700/50">
+                                        {/* Domestic - Cyan */}
+                                        <View style={{ width: `${brandAnalysis.summary.domestic_share}%` }} className="h-full bg-cyan-500 justify-center items-center">
+                                            {brandAnalysis.summary.domestic_share > 10 && <Text className="text-[9px] text-white font-bold">% {brandAnalysis.summary.domestic_share}</Text>}
+                                        </View>
+                                        {/* Import - Orange */}
+                                        <View style={{ width: `${brandAnalysis.summary.import_share}%` }} className="h-full bg-orange-500 justify-center items-center">
+                                            {brandAnalysis.summary.import_share > 10 && <Text className="text-[9px] text-white font-bold">% {brandAnalysis.summary.import_share}</Text>}
                                         </View>
                                     </View>
-                                ))}
+
+                                    {/* Legends */}
+                                    <View className="flex-row justify-between mt-3 px-1">
+                                        <View className="flex-row items-center gap-2">
+                                            <View className="w-3 h-3 rounded-full bg-cyan-500" />
+                                            <Text className="text-slate-300 text-xs font-medium">Yerli Üretim</Text>
+                                        </View>
+                                        <View className="flex-row items-center gap-2">
+                                            <View className="w-3 h-3 rounded-full bg-orange-500" />
+                                            <Text className="text-slate-300 text-xs font-medium">İthal Araç</Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* 2. Top Brands List */}
+                                <View>
+                                    <Text className="text-white text-sm font-bold mb-4">En Çok Satan Markalar</Text>
+                                    {brandAnalysis.top_brands.map((brand, idx) => (
+                                        <View key={brand.name} className="mb-4">
+                                            <View className="flex-row justify-between items-end mb-1.5">
+                                                <View className="flex-row items-center gap-2">
+                                                    <View className="w-5 h-5 bg-slate-700 rounded items-center justify-center">
+                                                        <Text className="text-slate-300 text-xs font-bold">{idx + 1}</Text>
+                                                    </View>
+                                                    <Text className="text-white font-bold text-sm">{brand.name}</Text>
+                                                </View>
+                                                <View className="items-end">
+                                                    <Text className="text-white font-bold text-sm">{formatNumber(brand.total_qty)}</Text>
+                                                    <Text className="text-slate-500 text-[10px]">Pazar Payı: %{brand.market_share}</Text>
+                                                </View>
+                                            </View>
+
+                                            {/* Stacked Bar */}
+                                            <View className="h-2 flex-row rounded-full overflow-hidden bg-slate-800">
+                                                {brand.domestic_qty > 0 && (
+                                                    <View style={{ flex: brand.domestic_qty, backgroundColor: '#06b6d4' }} />
+                                                )}
+                                                {brand.import_qty > 0 && (
+                                                    <View style={{ flex: brand.import_qty, backgroundColor: '#f97316' }} />
+                                                )}
+                                            </View>
+
+                                            {/* Labels below bar */}
+                                            <View className="flex-row justify-between mt-1">
+                                                <Text className="text-[10px] text-cyan-400 font-medium">
+                                                    {brand.domestic_qty > 0 ? `Yerli: ${formatNumber(brand.domestic_qty)}` : ''}
+                                                </Text>
+                                                <Text className="text-[10px] text-orange-400 font-medium">
+                                                    {brand.import_qty > 0 ? `İthal: ${formatNumber(brand.import_qty)}` : ''}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
                             </View>
-                        </View>
+                        )
                     )}
                 </View>
 
@@ -452,7 +607,7 @@ export default function AutoScreen() {
                     <View className="flex-row justify-between items-center mb-6">
                         <View className="flex-row items-center gap-2">
                             <Text className="text-white text-lg font-bold">Tarihsel Trend</Text>
-                            <TouchableOpacity onPress={() => setIsMaximized(true)} className="bg-slate-700/50 p-1.5 rounded-lg">
+                            <TouchableOpacity onPress={() => setIsTrendMaximized(true)} className="bg-slate-700/50 p-1.5 rounded-lg">
                                 <Text className="text-cyan-400 text-xs font-bold">⤢</Text>
                             </TouchableOpacity>
                         </View>
@@ -462,10 +617,10 @@ export default function AutoScreen() {
                             {(['1Y', '7Y'] as const).map((opt) => (
                                 <TouchableOpacity
                                     key={opt}
-                                    onPress={() => setFilter(opt)}
-                                    className={`px-3 py-1 rounded-md ${filter === opt ? 'bg-blue-600' : 'bg-transparent'}`}
+                                    onPress={() => setTrendFilter(opt)}
+                                    className={`px-3 py-1 rounded-md ${trendFilter === opt ? 'bg-blue-600' : 'bg-transparent'}`}
                                 >
-                                    <Text className={`text-xs font-bold ${filter === opt ? 'text-white' : 'text-slate-400'}`}>
+                                    <Text className={`text-xs font-bold ${trendFilter === opt ? 'text-white' : 'text-slate-400'}`}>
                                         {opt}
                                     </Text>
                                 </TouchableOpacity>
