@@ -11,6 +11,11 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+
+import { LogBox } from 'react-native';
+
+LogBox.ignoreLogs(['Unable to activate keep awake']);
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
