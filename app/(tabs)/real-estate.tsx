@@ -1,9 +1,9 @@
-import { CityItem, CityTrendData, RealEstateHeaderStats, RealEstateSalesBreakdown, getActiveCities, getCitySalesTrend, getRealEstateHeader, getSalesBreakdown } from '@/lib/housingService';
+import { CityItem, CityTrendData, RealEstateHeaderStats, RealEstateSalesBreakdown, RealEstateSupplyStats, getActiveCities, getCitySalesTrend, getRealEstateHeader, getRealEstateMacroHistory, getRealEstateSupplyStats, getSalesBreakdown } from '@/lib/housingService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Building, Check, MapPin, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
+import { Building, Check, Home, Info, Key, Lightbulb, MapPin, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Modal, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
-import { LineChart, PieChart } from 'react-native-gifted-charts';
+import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -31,6 +31,15 @@ export default function RealEstateScreen() {
     const [trendData, setTrendData] = useState<CityTrendData[]>([]);
     const [isTrendLoading, setTrendLoading] = useState(false);
     const [isTrendCityModalVisible, setTrendCityModalVisible] = useState(false);
+
+    // Supply & Future (Arz ve Gelecek)
+    const [supplyStats, setSupplyStats] = useState<RealEstateSupplyStats | null>(null);
+    const [isSupplyInfoVisible, setSupplyInfoVisible] = useState(false);
+
+    // Macro Cycle State
+    const [macroData, setMacroData] = useState<any[]>([]);
+    const [macroFilter, setMacroFilter] = useState<24 | 60>(60);
+    const [isMacroLoading, setMacroLoading] = useState(false);
     const carouselRef = useRef<ScrollView>(null);
 
     // Initial Trend Load
@@ -114,28 +123,46 @@ export default function RealEstateScreen() {
         fetchSalesData();
     }, [selectedCity]);
 
-    const fetchInitialData = async () => {
+    const fetchInitialData = useCallback(async () => {
         try {
             setGlobalLoading(true);
+            // Parallel Fetching
+            const [activeCities, headerData, salesData, trendData, supplyData, macroHistory] = await Promise.all([
+                getActiveCities(),
+                getRealEstateHeader(),
+                getSalesBreakdown(),
+                getCitySalesTrend([]),
+                getRealEstateSupplyStats(),
+                getRealEstateMacroHistory(60) // Default 5 years
+            ]);
 
-            // Fetch Cities if empty
-            if (cityList.length === 0) {
-                const cities = await getActiveCities();
-                const allCities = [{ city_code: 'TR', city_name: 'TÜRKİYE GENELİ' }, ...cities];
-                setCityList(allCities);
-            }
-
-            const headerRes = await getRealEstateHeader();
-            if (headerRes && headerRes.data) {
-                setHeaderStats(headerRes.data);
-            }
+            setCityList(activeCities);
+            if (headerData.data) setHeaderStats(headerData.data);
+            if (salesData.data) setSalesBreakdown(salesData.data);
+            if (trendData) setTrendData(trendData);
+            if (supplyData.data) setSupplyStats(supplyData.data);
+            if (macroHistory.data) setMacroData(macroHistory.data);
         } catch (error) {
-            console.error('Real Estate Initial Fetch Error:', error);
+            console.error('Initial Fetch Error:', error);
         } finally {
             setGlobalLoading(false);
+            setRefreshing(false);
+        }
+    }, []);
+
+    const handleMacroFilterChange = async (months: 24 | 60) => {
+        if (months === macroFilter) return;
+        setMacroFilter(months);
+        setMacroLoading(true);
+        try {
+            const { data } = await getRealEstateMacroHistory(months);
+            if (data) setMacroData(data);
+        } catch (error) {
+            console.error('Macro Filter Error:', error);
+        } finally {
+            setMacroLoading(false);
         }
     };
-
     const fetchSalesData = async () => {
         try {
             setSalesLoading(true);
@@ -299,7 +326,7 @@ export default function RealEstateScreen() {
 
                 {/* --- Satışın Dağılımı section --- */}
                 {/* --- Carousel Section --- */}
-                <View className="mb-20">
+                <View className="mb-6">
                     <ScrollView
                         ref={carouselRef}
                         horizontal
@@ -310,7 +337,7 @@ export default function RealEstateScreen() {
                         contentContainerStyle={{ alignItems: 'flex-start' }}
                     >
                         {/* SLIDE 1: Satışın Kimyası (Original) */}
-                        <View style={{ width: CAROUSEL_WIDTH }} className="bg-slate-800/20 rounded-3xl p-5 border border-white/5 min-h-[360px]">
+                        <View style={{ width: CAROUSEL_WIDTH }} className="bg-slate-800/20 rounded-3xl p-5 border border-white/5 h-[325px]">
                             {/* Header + Controls */}
                             <View className="flex-col gap-3 mb-6">
                                 <View className="flex-row items-center gap-2">
@@ -440,7 +467,7 @@ export default function RealEstateScreen() {
                                                                 <View className="flex-1 h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
                                                                     <View style={{ width: `${item.share}%`, backgroundColor: colors[idx % colors.length] }} className="h-full rounded-full" />
                                                                 </View>
-                                                                <Text className="text-slate-400 text-[10px] w-8 text-right">%{item.share}</Text>
+                                                                <Text className="text-slate-400 text-[10px] w-11 text-right" numberOfLines={1}>%{item.share}</Text>
                                                             </View>
                                                             {salesTimeFilter === 'MONTH' && (
                                                                 <View className={`self-end mt-1 flex-row items-center gap-1 px-1.5 py-0.5 rounded ${item.direction === 'up' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
@@ -464,7 +491,7 @@ export default function RealEstateScreen() {
                         </View>
 
                         {/* SLIDE 2: Trend Yarışı (New) */}
-                        <View style={{ width: CAROUSEL_WIDTH }} className="bg-slate-800/20 rounded-3xl p-5 border border-white/5 min-h-[360px]">
+                        <View style={{ width: CAROUSEL_WIDTH }} className="bg-slate-800/20 rounded-3xl p-5 border border-white/5 h-[325px]">
                             {/* Header */}
                             <View className="flex-row justify-between items-center mb-6">
                                 <View className="flex-row items-center gap-2">
@@ -491,7 +518,7 @@ export default function RealEstateScreen() {
                                     <Text className="text-slate-500">Veri bulunamadı.</Text>
                                 </View>
                             ) : (
-                                <View className="h-64 justify-center">
+                                <View className="justify-center">
                                     {(() => {
                                         // Process Data for Gifted Charts
                                         // Colors: Blue, Red, Green, Purple, Orange
@@ -645,7 +672,272 @@ export default function RealEstateScreen() {
                     </View>
                 </View>
 
-                {/* Modal 2: Multi-Select Trend Cities */}
+                {/* --- Arz ve Gelecek Section --- */}
+                <View className="mb-10">
+                    <Text className="text-white text-lg font-bold mb-3">Arz ve Gelecek</Text>
+
+                    <View className="flex-col gap-4">
+                        {/* 1. İlan Havuzu (Satılık/Kiralık) */}
+                        <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4">
+                            {isGlobalLoading || !supplyStats ? (
+                                <View>
+                                    <View className="h-4 w-32 bg-slate-700 rounded mb-4 animate-pulse" />
+                                    <View className="h-12 w-full bg-slate-700 rounded mb-2 animate-pulse" />
+                                    <View className="h-12 w-full bg-slate-700 rounded animate-pulse" />
+                                </View>
+                            ) : (
+                                <>
+                                    <View className="flex-row justify-between items-center mb-4">
+                                        <Text className="text-white font-bold text-base mb-0">İlan Havuzu</Text>
+
+                                        <Text className="text-slate-500 text-[10px]">
+                                            {(() => {
+                                                if (!supplyStats.listings.reference_date) return '';
+                                                const d = new Date(supplyStats.listings.reference_date);
+                                                return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+                                            })()}
+                                        </Text>
+                                    </View>
+
+                                    <View className="flex-col gap-4">
+                                        {/* Satılık */}
+                                        <View className="flex-row items-center gap-4 bg-slate-900/30 p-3 rounded-xl border border-white/5">
+                                            <View className="bg-orange-500/20 p-2 rounded-lg">
+                                                <Home size={20} color="#f97316" />
+                                            </View>
+                                            <View>
+                                                <Text className="text-white text-xl font-bold">{formatNumber(supplyStats.listings.for_sale)}</Text>
+                                                <Text className="text-slate-400 text-xs font-medium">Satılık Konut</Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Kiralık */}
+                                        <View className="flex-row items-center gap-4 bg-slate-900/30 p-3 rounded-xl border border-white/5">
+                                            <View className="bg-blue-500/20 p-2 rounded-lg">
+                                                <Key size={20} color="#3b82f6" />
+                                            </View>
+                                            <View>
+                                                <Text className="text-white text-xl font-bold">{formatNumber(supplyStats.listings.for_rent)}</Text>
+                                                <Text className="text-slate-400 text-xs font-medium">Kiralık Konut</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+
+                        {/* 2. Gelecek Arzı (İnşaat İzinleri) */}
+                        <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4">
+                            {isGlobalLoading || !supplyStats ? (
+                                <View>
+                                    <View className="h-4 w-32 bg-slate-700 rounded mb-4 animate-pulse" />
+                                    <View className="h-16 w-full bg-slate-700 rounded mb-2 animate-pulse" />
+                                </View>
+                            ) : (
+                                <>
+                                    <View className="flex-row justify-between items-start mb-2">
+                                        <Text className="text-white font-bold text-base">Gelecek Arzı</Text>
+                                        <Text className="text-slate-500 text-[10px]">
+                                            {(() => {
+                                                if (!supplyStats.permits.reference_date) return '';
+                                                const d = new Date(supplyStats.permits.reference_date);
+                                                // Eyl '25 format
+                                                const month = d.toLocaleString('tr-TR', { month: 'short' });
+                                                const year = d.getFullYear().toString().slice(2);
+                                                return `${month} '${year}`;
+                                            })()}
+                                        </Text>
+                                    </View>
+
+                                    <View className="mt-4 flex-row justify-between items-start">
+                                        <View>
+                                            <Text className="text-white text-4xl font-extrabold tracking-tight">
+                                                {formatNumber(supplyStats.permits.total_units)}
+                                            </Text>
+                                            <Text className="text-slate-400 text-sm font-medium mt-1 mb-2">Yeni Konut İzni</Text>
+
+                                            {/* Trend */}
+                                            <View className={`flex-row items-center gap-1 self-start px-2 py-1 rounded-md ${supplyStats.permits.direction === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                                                {supplyStats.permits.direction === 'up' ?
+                                                    <TrendingUp size={14} color="#22c55e" /> :
+                                                    <TrendingDown size={14} color="#ef4444" />
+                                                }
+                                                <Text className={`${supplyStats.permits.direction === 'up' ? 'text-green-400' : 'text-red-400'} text-xs font-bold`}>
+                                                    %{Math.abs(supplyStats.permits.percent_change)}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Badge - Aligned with top of the number */}
+                                        <View className="bg-slate-700/50 px-2 py-1 rounded-md flex-row items-center gap-1 border border-white/5 mt-2">
+                                            <Info size={10} color="#94a3b8" />
+                                            <Text className="text-slate-300 text-[10px] font-bold">Ort. {supplyStats.permits.avg_sqm} m²</Text>
+                                        </View>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+                    </View>
+                </View>
+
+                {/* --- Büyük Resim (Macro Cycle) Section --- */}
+                <View className="mb-24">
+                    <View className="flex-row justify-between items-center mb-4">
+                        <Text className="text-white text-lg font-bold">Büyük Resim</Text>
+                        <View className="flex-row bg-slate-800 rounded-lg p-1 border border-white/10">
+                            <TouchableOpacity
+                                onPress={() => handleMacroFilterChange(24)}
+                                className={`px-3 py-1 rounded-md ${macroFilter === 24 ? 'bg-slate-700' : ''}`}
+                            >
+                                <Text className={`text-xs font-bold ${macroFilter === 24 ? 'text-white' : 'text-slate-400'}`}>2 YIL</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => handleMacroFilterChange(60)}
+                                className={`px-3 py-1 rounded-md ${macroFilter === 60 ? 'bg-slate-700' : ''}`}
+                            >
+                                <Text className={`text-xs font-bold ${macroFilter === 60 ? 'text-white' : 'text-slate-400'}`}>5 YIL</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4 overflow-hidden">
+                        {isMacroLoading || isGlobalLoading || macroData.length === 0 ? (
+                            <View className="h-[250px] justify-center items-center">
+                                <Text className="text-slate-500">Veriler Yükleniyor...</Text>
+                            </View>
+                        ) : (
+                            <View style={{ marginLeft: -10 }}>
+                                <BarChart
+                                    data={macroData.map((d, index) => {
+                                        // Use date_label based on verifiable JSON
+                                        const rawDate = d.date_label || d.year_month;
+
+                                        // Safety Check
+                                        if (!rawDate) {
+                                            return {
+                                                value: d.total_sales || 0,
+                                                label: d.period_label || '',
+                                                frontColor: '#4F46E5',
+                                                secondaryValue: d.interest_rate || 0,
+                                                tooltipDate: '',
+                                                index: index
+                                            };
+                                        }
+
+                                        // Date Formatting: 2024-12 -> Aralık '24
+                                        const [year, month] = rawDate.split('-');
+                                        const date = new Date(parseInt(year), parseInt(month) - 1);
+                                        // Short label for X-Axis (e.g. 'Ara')
+                                        const shortMonth = date.toLocaleDateString('tr-TR', { month: 'short' });
+                                        // Long label for Tooltip (e.g. Aralık '24)
+                                        const formattedDate = date.toLocaleDateString('tr-TR', { month: 'long' }) + " '" + year.slice(2);
+
+                                        return {
+                                            value: d.total_sales,
+                                            label: '', // Hide from X-axis as requested
+                                            frontColor: '#4F46E5',
+                                            secondaryValue: d.interest_rate,
+                                            tooltipDate: formattedDate,
+                                            index: index
+                                        };
+                                    })}
+                                    barWidth={macroFilter === 60 ? 4 : 8}
+                                    spacing={macroFilter === 60 ? 4 : 12}
+                                    roundedTop
+                                    roundedBottom={false}
+                                    hideRules
+                                    xAxisThickness={0}
+                                    yAxisThickness={0}
+                                    yAxisTextStyle={{ color: '#94a3b8', fontSize: 10 }}
+                                    noOfSections={4}
+
+                                    // Combo Chart Setup
+                                    showLine
+                                    lineData={macroData.map(d => ({
+                                        value: d.interest_rate,
+                                    }))}
+                                    lineConfig={{
+                                        isSecondary: true,
+                                        color: '#F97316',
+                                        thickness: 3,
+                                        curved: true,
+                                        hideDataPoints: true,
+                                        shiftY: 0,
+                                        initialSpacing: 0,
+                                    }}
+
+                                    // Secondary Axis Configuration
+                                    secondaryYAxis={{
+                                        maxValue: 60,
+                                        stepValue: 12,
+                                        noOfSections: 5,
+                                        labelColor: '#F97316',
+                                        yAxisTextStyle: { color: '#F97316', fontSize: 10 },
+                                        labelText: '%'
+                                    }}
+
+                                    // Pointer Interaction (Tooltip)
+                                    pointerConfig={{
+                                        pointerStripUptoDataPoint: true,
+                                        pointerStripColor: 'lightgray',
+                                        pointerStripWidth: 2,
+                                        strokeDashArray: [2, 5],
+                                        pointerColor: 'lightgray',
+                                        radius: 4,
+                                        pointerLabelWidth: 100,
+                                        pointerLabelHeight: 120,
+                                        activatePointersOnLongPress: false,
+                                        autoAdjustPointerLabelPosition: false,
+                                        pointerLabelComponent: (items: any) => {
+                                            const item = items[0];
+                                            const totalItems = macroData.length;
+                                            // Shift left for the last 11 items to prevent overflow
+                                            const isRightSide = item.index >= totalItems - 11;
+
+                                            return (
+                                                <View style={{
+                                                    height: 100,
+                                                    width: 100,
+                                                    backgroundColor: '#282C34',
+                                                    borderRadius: 4,
+                                                    padding: 8,
+                                                    // Dynamic positioning shift
+                                                    transform: [{ translateX: isRightSide ? -100 : 0 }]
+                                                }}>
+                                                    <Text style={{ color: 'white', fontSize: 12, marginBottom: 4 }}>{item.tooltipDate}</Text>
+
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                                        <View style={{ width: 8, height: 8, backgroundColor: '#4F46E5', borderRadius: 4, marginRight: 4 }} />
+                                                        <Text style={{ color: 'lightgray', fontSize: 10 }}>Satış: {formatNumber(item.value)}</Text>
+                                                    </View>
+
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                        <View style={{ width: 8, height: 8, backgroundColor: '#F97316', borderRadius: 4, marginRight: 4 }} />
+                                                        <Text style={{ color: 'lightgray', fontSize: 10 }}>Faiz: %{item.secondaryValue}</Text>
+                                                    </View>
+                                                </View>
+                                            );
+                                        },
+                                    }}
+                                />
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Analyst Note */}
+                    <View className="flex-row gap-3 bg-slate-50 p-4 rounded-xl mt-4 items-start">
+                        <View className="bg-yellow-100 p-2 rounded-full">
+                            <Lightbulb size={20} color="#eab308" strokeWidth={2.5} />
+                        </View>
+                        <View className="flex-1">
+                            <Text className="text-slate-800 text-sm font-semibold mb-1">Piyasa Kuralı</Text>
+                            <Text className="text-slate-600 text-xs leading-5">
+                                Kredi faizleri (Turuncu) yükseldiğinde, konut satışları (Mavi) genellikle baskılanır. Yatırım fırsatları genellikle makasın en açık olduğu dönemlerde oluşur.
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
                 <Modal
                     visible={isTrendCityModalVisible}
                     transparent={true}
@@ -761,7 +1053,43 @@ export default function RealEstateScreen() {
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+
+            {/* Supply Info Modal */}
+            <Modal
+                visible={isSupplyInfoVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setSupplyInfoVisible(false)}
+            >
+                <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => setSupplyInfoVisible(false)}
+                    className="flex-1 bg-black/60 justify-center items-center px-8"
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        className="bg-[#1e293b] w-full p-5 rounded-2xl border border-white/10 shadow-xl"
+                    >
+                        <View className="flex-row items-center gap-2 mb-3">
+                            <Info size={18} color="#60a5fa" />
+                            <Text className="text-white font-bold text-base">Veri Metodolojisi</Text>
+                        </View>
+                        <Text className="text-slate-300 text-sm leading-relaxed">
+                            Piyasa trendlerini doğru yansıtmak amacıyla, mükerrer kayıtları önlemek için sadece en yüksek hacimli pazar yeri verileri baz alınmıştır.
+                        </Text>
+
+                        <TouchableOpacity
+                            onPress={() => setSupplyInfoVisible(false)}
+                            className="mt-4 self-end bg-slate-700/50 px-4 py-2 rounded-lg"
+                        >
+                            <Text className="text-white text-xs font-bold">Tamam</Text>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
+
+        </SafeAreaView >
     );
 }
 
+// Force Refresh

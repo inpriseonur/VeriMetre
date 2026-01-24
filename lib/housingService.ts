@@ -302,3 +302,120 @@ export const getCitySalesTrend = async (cityCodes: string[]): Promise<CityTrendD
         return [];
     }
 };
+const REAL_ESTATE_SUPPLY_CACHE_KEY = 'real_estate_supply_stats_cache';
+
+export interface RealEstateSupplyStats {
+    listings: {
+        for_sale: number;
+        for_rent: number;
+        reference_date: string;
+    };
+    permits: {
+        total_units: number;
+        avg_sqm: number;
+        percent_change: number;
+        direction: 'up' | 'down' | 'neutral';
+        reference_date: string;
+    };
+}
+
+export const getRealEstateSupplyStats = async (): Promise<{ data: RealEstateSupplyStats | null; source: 'cache' | 'rpc' }> => {
+    try {
+        const cachedString = await AsyncStorage.getItem(REAL_ESTATE_SUPPLY_CACHE_KEY);
+        let cachedData: RealEstateSupplyStats | null = null;
+
+        if (cachedString) {
+            cachedData = JSON.parse(cachedString);
+        }
+
+        const freshDate = await checkHousingFreshness();
+
+        if (!freshDate) {
+            return { data: cachedData, source: 'cache' };
+        }
+
+        const isCacheStale = !cachedData || (new Date(freshDate) > new Date(cachedData.listings.reference_date));
+
+        if (isCacheStale) {
+            console.log('🏗️ Arz ve Gelecek Cache bayatlamış. RPC çağrılıyor...');
+            const { data, error } = await supabase.rpc('get_real_estate_supply_stats');
+
+            if (error || !data) {
+                console.error('Arz RPC Hatası:', error);
+                return { data: cachedData, source: 'cache' };
+            }
+
+            const newData: RealEstateSupplyStats = data as RealEstateSupplyStats;
+            await AsyncStorage.setItem(REAL_ESTATE_SUPPLY_CACHE_KEY, JSON.stringify(newData));
+
+            return { data: newData, source: 'rpc' };
+        } else {
+            console.log('✅ Arz ve Gelecek Cache güncel.');
+            return { data: cachedData, source: 'cache' };
+        }
+
+    } catch (error) {
+        console.error('getRealEstateSupplyStats genel hata:', error);
+        return { data: null, source: 'cache' };
+    }
+};
+
+export interface RealEstateMacroData {
+    period_label: string;
+    total_sales: number;
+    interest_rate: number;
+    year_month: string; // YYYY-MM
+}
+
+const REAL_ESTATE_MACRO_CACHE_KEY = 'real_estate_macro_cache';
+
+export const getRealEstateMacroHistory = async (monthsBack: number = 60): Promise<{ data: RealEstateMacroData[] | null; source: 'cache' | 'rpc' }> => {
+    try {
+        // Cache key includes the time period filter
+        const cacheKey = `${REAL_ESTATE_MACRO_CACHE_KEY}_${monthsBack}`;
+        const refDateKey = `${cacheKey}_ref_date`;
+
+        const cachedString = await AsyncStorage.getItem(cacheKey);
+        let cachedData: RealEstateMacroData[] | null = null;
+
+        if (cachedString) {
+            cachedData = JSON.parse(cachedString);
+        }
+
+        // Check for data freshness
+        const freshDate = await checkHousingFreshness();
+
+        if (!freshDate) {
+            return { data: cachedData, source: 'cache' };
+        }
+
+        const lastRefDate = await AsyncStorage.getItem(refDateKey);
+        const isCacheStale = !cachedData || !lastRefDate || (new Date(freshDate) > new Date(lastRefDate));
+
+        if (isCacheStale) {
+            console.log(`🌍 Büyük Resim (${monthsBack} Ay) Cache bayatlamış. RPC çağrılıyor...`);
+
+            const { data, error } = await supabase.rpc('get_real_estate_macro_history', { months_back: monthsBack });
+
+            if (error || !data) {
+                console.error('Macro Cycle RPC Hatası:', error);
+                return { data: cachedData, source: 'cache' };
+            }
+
+            // The RPC returns data, we cast it
+            const newData: RealEstateMacroData[] = data as RealEstateMacroData[];
+
+            await AsyncStorage.setItem(cacheKey, JSON.stringify(newData));
+            await AsyncStorage.setItem(refDateKey, freshDate);
+
+            return { data: newData, source: 'rpc' };
+        } else {
+            console.log(`✅ Büyük Resim (${monthsBack} Ay) Cache güncel.`);
+            return { data: cachedData, source: 'cache' };
+        }
+
+    } catch (error) {
+        console.error('getRealEstateMacroHistory genel hata:', error);
+        return { data: null, source: 'cache' };
+    }
+};
