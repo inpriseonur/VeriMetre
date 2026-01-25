@@ -1,5 +1,5 @@
 import { fetchMarketData, MarketItem } from '@/lib/marketService';
-import { ArrowLeftRight, Banknote, BarChart3, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { ArrowLeftRight, Banknote, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -152,7 +152,7 @@ export default function MarketsScreen() {
     const scrollViewRef = React.useRef<ScrollView>(null);
 
     return (
-        <SafeAreaView className="flex-1 bg-[#0B1121]">
+        <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
             <KeyboardAvoidingView
@@ -168,18 +168,7 @@ export default function MarketsScreen() {
                     }
                     contentContainerStyle={{ paddingBottom: bottomPadding }}
                 >
-                    {/* --- Header --- */}
-                    <View className="flex-row justify-between items-center mb-6">
-                        <View className="flex-row items-center gap-2">
-                            <View className="bg-blue-600 p-1.5 rounded-lg">
-                                <BarChart3 size={20} color="white" />
-                            </View>
-                            <Text className="text-white text-2xl font-bold tracking-tight">VeriMatik</Text>
-                        </View>
-                        <View className="bg-slate-800/80 px-3 py-1.5 rounded-full">
-                            <Text className="text-slate-400 text-xs font-medium">Son Güncelleme: {timeString}</Text>
-                        </View>
-                    </View>
+                    {/* --- Header Removed --- */}
 
                     <Text className="text-white text-lg font-bold mb-4">Piyasalar</Text>
 

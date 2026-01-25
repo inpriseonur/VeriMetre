@@ -12,50 +12,28 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 // };
 
 
+import { AuthProvider } from '@/providers/AuthProvider';
 import { LogBox } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 LogBox.ignoreLogs(['Unable to activate keep awake']);
 
-import LoginScreen from '@/app/login';
-import { AuthProvider, useAuth } from '@/providers/AuthProvider';
-import { ActivityIndicator, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
-// Separate component to use the Auth Hook
-function InitialLayout() {
-  const { session, isLoading, isGuest } = useAuth();
+export default function RootLayout() {
   const colorScheme = useColorScheme();
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-[#0B1121]">
-        <ActivityIndicator size="large" color="#F97316" />
-      </View>
-    );
-  }
-
-  // If not logged in AND not guest, show Login Screen
-  if (!session && !isGuest) {
-    return <LoginScreen />;
-  }
-
-  return (
-    <ThemeProvider value={DarkTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
-}
-
-export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <InitialLayout />
+        <ThemeProvider value={DarkTheme}>
+          <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen name="login-modal" options={{ presentation: 'modal', headerShown: false }} />
+            <Stack.Screen name="profile-modal" options={{ presentation: 'modal', headerShown: false }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

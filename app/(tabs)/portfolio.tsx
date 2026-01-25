@@ -128,7 +128,7 @@ export default function PortfolioScreen() {
     const insets = useSafeAreaInsets();
 
     return (
-        <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['top', 'left', 'right']}>
+        <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
             {/* --- Hero Card --- */}

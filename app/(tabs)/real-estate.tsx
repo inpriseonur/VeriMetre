@@ -1,6 +1,6 @@
 import { CityItem, CityTrendData, RealEstateHeaderStats, RealEstateSalesBreakdown, RealEstateSupplyStats, getActiveCities, getCitySalesTrend, getRealEstateHeader, getRealEstateMacroHistory, getRealEstateSupplyStats, getSalesBreakdown } from '@/lib/housingService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Building, Check, Home, Info, Key, Lightbulb, MapPin, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
+import { Check, Home, Info, Key, Lightbulb, MapPin, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Modal, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
@@ -198,7 +198,7 @@ export default function RealEstateScreen() {
     const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
     return (
-        <SafeAreaView className="flex-1 bg-[#0B1121]">
+        <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
             <ScrollView
@@ -207,18 +207,7 @@ export default function RealEstateScreen() {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
                 }
             >
-                {/* --- Header --- */}
-                <View className="flex-row justify-between items-center mb-6">
-                    <View className="flex-row items-center gap-2">
-                        <View className="bg-blue-600 p-1.5 rounded-lg">
-                            <Building size={20} color="white" />
-                        </View>
-                        <Text className="text-white text-2xl font-bold tracking-tight">VeriMatik</Text>
-                    </View>
-                    <View className="bg-slate-800/80 px-3 py-1.5 rounded-full">
-                        <Text className="text-slate-400 text-xs font-medium">Son Güncelleme: {timeString}</Text>
-                    </View>
-                </View>
+                {/* --- Header Removed --- */}
 
                 {/* --- Piyasa Ateşi (Header Stats) --- */}
                 <View className="mb-8">

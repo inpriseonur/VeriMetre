@@ -18,7 +18,7 @@ type AuthContextType = {
     user: User | null;
     isLoading: boolean;
     isGuest: boolean;
-    signInWithGoogle: () => Promise<void>;
+    signInWithGoogle: () => Promise<boolean>;
     signOut: () => Promise<void>;
     setGuestMode: () => void;
 };
@@ -28,7 +28,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     isLoading: true,
     isGuest: false,
-    signInWithGoogle: async () => { },
+    signInWithGoogle: async () => false,
     signOut: async () => { },
     setGuestMode: () => { },
 });
@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
     }, []);
 
-    const signInWithGoogle = async () => {
+    const signInWithGoogle = async (): Promise<boolean> => {
         try {
             setIsLoading(true);
             await GoogleSignin.hasPlayServices();
@@ -85,23 +85,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             // Initiate Google Sign-In
             const userInfo = await GoogleSignin.signIn();
 
-            // Get ID Token (Depends on version; newer versions return explicit data object)
-            // Note: @react-native-google-signin/google-signin v13+ structure is slightly different
-            // Assuming standard response here. If idToken is missing, check webClientId config.
+            // Handle different versions of the library (v10 vs v11+)
+            // @ts-ignore
+            const idToken = userInfo.idToken || userInfo.data?.idToken;
 
-            if (userInfo.idToken) {
+            if (idToken) {
                 const { data, error } = await supabase.auth.signInWithIdToken({
                     provider: 'google',
-                    token: userInfo.idToken,
+                    token: idToken,
                 });
 
                 if (error) {
                     console.error("Supabase Auth Error:", error);
                     throw error;
                 }
-                // Session update handled by onAuthStateChange
+                return true; // Success
             } else {
-                throw new Error('No ID token present!');
+                // If no token, user might have cancelled or closed the window without error code
+                console.warn('Google Sign-In: No ID token present in response.');
+                return false; // Silent return, don't alert user
             }
         } catch (error: any) {
             console.error("Google Sign-In Error:", error);
@@ -112,6 +114,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             } else {
                 alert("Giriş başarısız oldu: " + error.message);
             }
+            return false;
         } finally {
             setIsLoading(false);
         }

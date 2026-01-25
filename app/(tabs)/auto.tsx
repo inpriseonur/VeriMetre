@@ -1,5 +1,5 @@
 import { AutoPageHeaderStats, AutoSalesHistoryItem, BrandAnalysis, FuelAnalysisResponse, getAutoPageHeader, getBrandAnalysis, getFuelAnalysis, getSalesHistory } from '@/lib/autoService';
-import { BarChart3, Calendar, ChevronDown, ChevronUp, Layers, TrendingDown, TrendingUp, Zap } from 'lucide-react-native';
+import { Calendar, ChevronDown, ChevronUp, Layers, TrendingDown, TrendingUp, Zap } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Modal, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
@@ -234,7 +234,7 @@ export default function AutoScreen() {
     );
 
     return (
-        <SafeAreaView className="flex-1 bg-[#0B1121]">
+        <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
             {/* Full Screen Modal */}
@@ -271,18 +271,7 @@ export default function AutoScreen() {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
                 }
             >
-                {/* --- Header (Same as Home) --- */}
-                <View className="flex-row justify-between items-center mb-6">
-                    <View className="flex-row items-center gap-2">
-                        <View className="bg-blue-600 p-1.5 rounded-lg">
-                            <BarChart3 size={20} color="white" />
-                        </View>
-                        <Text className="text-white text-2xl font-bold tracking-tight">VeriMatik</Text>
-                    </View>
-                    <View className="bg-slate-800/80 px-3 py-1.5 rounded-full">
-                        <Text className="text-slate-400 text-xs font-medium">Son Güncelleme: {timeString}</Text>
-                    </View>
-                </View>
+                {/* --- Header Removed --- */}
 
                 {/* --- Piyasa Nabzı (Header Cards) --- */}
                 <View className="mb-8">

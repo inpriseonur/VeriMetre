@@ -101,7 +101,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0B1121]">
+    <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
       <ScrollView
@@ -110,18 +110,7 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
         }
       >
-        {/* --- Header --- */}
-        <View className="flex-row justify-between items-center mb-6">
-          <View className="flex-row items-center gap-2">
-            <View className="bg-blue-600 p-1.5 rounded-lg">
-              <BarChart3 size={20} color="white" />
-            </View>
-            <Text className="text-white text-2xl font-bold tracking-tight">VeriMatik</Text>
-          </View>
-          <View className="bg-slate-800/80 px-3 py-1.5 rounded-full">
-            <Text className="text-slate-400 text-xs font-medium">Son Güncelleme: {timeString}</Text>
-          </View>
-        </View>
+        {/* --- Header removed, moved to Native Header --- */}
 
         {/* --- Market Summary Only Header --- */}
         <View className="flex-row justify-between items-center mb-3">
@@ -335,8 +324,12 @@ function MarketCard({
       {showPercentage && percentage && (
         <View className={`self-start px-2 py-0.5 rounded-full ${trend === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
           <View className="flex-row items-center gap-1">
-            {trend === 'up' ? <TrendingUp size={10} color={trend === 'up' ? '#22c55e' : '#ef4444'} /> : <TrendingDown size={10} color={trend === 'up' ? '#22c55e' : '#ef4444'} />}
-            <Text className={`${trend === 'up' ? 'text-green-500' : 'text-red-500'} text-xs font-bold`}>{percentage}</Text>
+            {trend === 'up' ? (
+              <TrendingUp size={10} color="#22c55e" />
+            ) : trend === 'down' ? (
+              <TrendingDown size={10} color="#ef4444" />
+            ) : null}
+            <Text className={`${trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : 'text-slate-400'} text-xs font-bold`}>{percentage}</Text>
           </View>
         </View>
       )}

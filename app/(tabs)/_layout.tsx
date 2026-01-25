@@ -7,6 +7,9 @@ import { HapticTab } from '@/components/haptic-tab';
 import TabBarBackground from '@/components/ui/tab-bar-background'; // Note: check file case in directory
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+import HeaderLogo from '@/components/HeaderLogo';
+import HeaderProfileButton from '@/components/HeaderProfileButton';
+
 const PortfolioTabButton = ({ children, onPress }: any) => (
   <TouchableOpacity
     style={{
@@ -52,7 +55,16 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: '#0F172A',
+          borderBottomWidth: 1,
+          borderBottomColor: '#1E293B',
+        },
+        headerTitle: () => <HeaderLogo />, // Use Logo component
+        headerTitleAlign: 'left', // Align left
+        headerLeftContainerStyle: { paddingLeft: 10 }, // Add padding
+        headerRight: () => <HeaderProfileButton />,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
         tabBarStyle: Platform.select({
@@ -66,13 +78,14 @@ export default function TabLayout() {
             borderTopColor: '#1E293B',
           },
         }),
-        tabBarActiveTintColor: '#38bdf8', // sky-400
-        tabBarInactiveTintColor: '#94a3b8', // slate-400
+        tabBarActiveTintColor: '#38bdf8',
+        tabBarInactiveTintColor: '#94a3b8',
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Ana Sayfa',
+          title: 'Ana Sayfa', // Fallback
+          tabBarLabel: 'Ana Sayfa',
           tabBarIcon: ({ color }) => <House size={24} color={color} />,
         }}
       />
@@ -80,15 +93,16 @@ export default function TabLayout() {
         name="markets"
         options={{
           title: 'Piyasalar',
+          tabBarLabel: 'Piyasalar',
           tabBarIcon: ({ color }) => <BarChart3 size={24} color={color} />,
         }}
       />
-
       {/* Portfolio Tab (Center - Raised) */}
       <Tabs.Screen
         name="portfolio"
         options={{
-          title: '', // No text label for this button ideally, or handle in component
+          title: 'Portföy',
+          tabBarLabel: '',
           tabBarIcon: ({ focused }) => (
             <PieChart size={30} color="white" />
           ),
@@ -97,11 +111,11 @@ export default function TabLayout() {
           ),
         }}
       />
-
       <Tabs.Screen
         name="real-estate"
         options={{
           title: 'Emlak',
+          tabBarLabel: 'Emlak',
           tabBarIcon: ({ color }) => <Building size={24} color={color} />,
         }}
       />
@@ -109,13 +123,14 @@ export default function TabLayout() {
         name="auto"
         options={{
           title: 'Otomobil',
+          tabBarLabel: 'Otomobil',
           tabBarIcon: ({ color }) => <Car size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="purchasing-power"
         options={{
-          href: null, // Hide from tab bar
+          href: null,
         }}
       />
     </Tabs>
