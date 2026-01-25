@@ -38,3 +38,30 @@ export const fetchMarketData = async (): Promise<MarketItem[] | null> => {
         return null;
     }
 };
+
+// ... (existing exports)
+
+export interface FundItem {
+    code: string;       // e.g. "AFT"
+    title: string;      // e.g. "Ak Portföy Yeni Teknolojiler..."
+    price: number;
+    last_updated?: string;
+}
+
+export const searchFunds = async (query: string): Promise<FundItem[]> => {
+    try {
+        const { data, error } = await supabase.functions.invoke('get-funds', {
+            body: { query }
+        });
+
+        if (error) {
+            console.error('Edge Function get-funds failed:', error);
+            return [];
+        }
+
+        return data as FundItem[];
+    } catch (err) {
+        console.error('Exception in searchFunds:', err);
+        return [];
+    }
+};
