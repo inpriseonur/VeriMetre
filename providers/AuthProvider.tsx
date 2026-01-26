@@ -1,23 +1,29 @@
 import { supabase } from '@/lib/supabase';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { Session, User } from '@supabase/supabase-js';
+import { useRouter } from 'expo-router';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 
 // Configure Google Sign-In (Should be called once, maybe here or in _layout)
-GoogleSignin.configure({
-    scopes: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, // From .env
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID, // Optional (if using newer generic flow, webClientId might suffice for Supabase)
-    offlineAccess: true,
-    forceCodeForRefreshToken: true,
-});
+try {
+    GoogleSignin.configure({
+        scopes: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, // From .env
+        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID, // Optional (if using newer generic flow, webClientId might suffice for Supabase)
+        offlineAccess: true,
+        forceCodeForRefreshToken: true,
+    });
+} catch (e) {
+    console.warn('GoogleSignin configuration failed. Native module might be missing.', e);
+}
 
 type AuthContextType = {
     session: Session | null;
     user: User | null;
     isLoading: boolean;
     isGuest: boolean;
+    resetKey: number; // Increments on logout to signal components to clear their data
     signInWithGoogle: () => Promise<boolean>;
     signOut: () => Promise<void>;
     setGuestMode: () => void;
@@ -28,6 +34,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     isLoading: true,
     isGuest: false,
+    resetKey: 0,
     signInWithGoogle: async () => false,
     signOut: async () => { },
     setGuestMode: () => { },
@@ -40,6 +47,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isGuest, setIsGuest] = useState(false);
+    const [resetKey, setResetKey] = useState(0);
 
     useEffect(() => {
         // 1. Check existing session
@@ -120,16 +128,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const router = useRouter();
+
     const signOut = async () => {
-        setIsLoading(true);
+        // Do not set isLoading(true) to prevent Splash Screen flicker
         try {
             await GoogleSignin.signOut(); // Sign out from Google
             await supabase.auth.signOut(); // Sign out from Supabase
+
+            // Reset State
+            setSession(null);
+            setUser(null);
             setIsGuest(false);
+
+            // Increment resetKey - Components watching this will clear their data
+            setResetKey(prev => prev + 1);
+
+            // Navigate to home - Use expo-router's methods
+            router.replace('/');
+
         } catch (error) {
             console.error("Sign Out Error:", error);
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -143,6 +162,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             user,
             isLoading,
             isGuest,
+            resetKey,
             signInWithGoogle,
             signOut,
             setGuestMode

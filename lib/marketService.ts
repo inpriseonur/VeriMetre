@@ -42,7 +42,7 @@ export const fetchMarketData = async (): Promise<MarketItem[] | null> => {
 // ... (existing exports)
 
 export interface FundItem {
-    code: string;       // e.g. "AFT"
+    fund_code: string;       // e.g. "AFT"
     title: string;      // e.g. "Ak Portföy Yeni Teknolojiler..."
     price: number;
     last_updated?: string;
@@ -50,12 +50,19 @@ export interface FundItem {
 
 export const searchFunds = async (query: string): Promise<FundItem[]> => {
     try {
-        const { data, error } = await supabase.functions.invoke('get-funds', {
-            body: { query }
-        });
+        // Always send a body so the Edge Function doesn't fail on req.json()
+        const options = {
+            body: {
+                query: query || ""
+            }
+        };
+
+        const { data, error } = await supabase.functions.invoke('get-funds', options);
 
         if (error) {
             console.error('Edge Function get-funds failed:', error);
+            // Fallback debugging
+            console.log('Query was:', query);
             return [];
         }
 
