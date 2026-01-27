@@ -1,5 +1,8 @@
-import { fetchMarketData, MarketItem } from '@/lib/marketService';
-import { ArrowLeftRight, Banknote, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { LivingStandardsChart } from '@/components/LivingStandardsChart';
+import { EconomicIndicators, fetchMarketData, getEconomicIndicators, getLivingStandardsHistory, MarketItem } from '@/lib/marketService';
+import { ViewLivingStandards } from '@/types/database';
+import { useFocusEffect } from 'expo-router';
+import { ArrowLeftRight, Banknote, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingUp } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -15,7 +18,6 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { LineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -26,6 +28,11 @@ export default function MarketsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [bottomPadding, setBottomPadding] = useState(40);
 
+    // Economic Indicators State (Decoupled)
+    const [indicators, setIndicators] = useState<EconomicIndicators | null>(null);
+    const [chartHistory, setChartHistory] = useState<ViewLivingStandards[]>([]);
+    const [inflationSource, setInflationSource] = useState<'TÜİK' | 'ENAG' | 'İTO'>('TÜİK');
+
     // Converter State
     const [amount, setAmount] = useState('1');
     const [selectedCurrencyId, setSelectedCurrencyId] = useState<number | null>(null);
@@ -34,9 +41,42 @@ export default function MarketsScreen() {
     const now = new Date();
     const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-    useEffect(() => {
-        loadData(); // Initial load
+    const loadData = async (silent = false) => {
+        if (!silent) setLoading(true);
 
+        const [mRes, iRes, hRes] = await Promise.all([
+            fetchMarketData(),
+            getEconomicIndicators(),
+            getLivingStandardsHistory(13)
+        ]);
+
+        if (mRes) {
+            setMarketData(mRes);
+            if (!selectedCurrencyId) {
+                const defaultCurr = mRes.find(item => item.id !== 4); // Assuming 4 is BIST
+                if (defaultCurr) setSelectedCurrencyId(defaultCurr.id);
+            }
+        }
+
+        if (iRes) {
+            setIndicators(iRes);
+        }
+
+        if (hRes) {
+            setChartHistory(hRes);
+        }
+
+        if (!silent) setLoading(false);
+        setRefreshing(false);
+    };
+
+    useFocusEffect(
+        React.useCallback(() => {
+            loadData();
+        }, [])
+    );
+
+    useEffect(() => {
         // Auto-refresh every 60 seconds
         const interval = setInterval(() => {
             loadData(true); // Silent refresh
@@ -61,24 +101,7 @@ export default function MarketsScreen() {
         };
     }, []);
 
-    const loadData = async (silent = false) => {
-        if (!silent) setLoading(true);
 
-        // If silent, we don't show global spinner, maybe small indicator? 
-        // For now user requested "sessizce", so no UI change
-
-        const data = await fetchMarketData();
-        if (data) {
-            setMarketData(data);
-            // Default selected currency for converter (First available that is NOT BIST)
-            if (!selectedCurrencyId) {
-                const defaultCurr = data.find(item => item.id !== 4); // Assuming 4 is BIST
-                if (defaultCurr) setSelectedCurrencyId(defaultCurr.id);
-            }
-        }
-        if (!silent) setLoading(false);
-        setRefreshing(false);
-    };
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -86,57 +109,25 @@ export default function MarketsScreen() {
     };
 
     // Derived Data
-    const heroItems = marketData.filter(item => [1, 2, 3, 4].includes(item.id)); // Core items
-    const gridItems = marketData; // Show all in grid? Or remaining? User said "All instruments"
+    const gridItems = marketData;
 
-    // Component: Hero Card (Sparkline)
-    // Helper render function for Hero Card (it doesn't use state, so it's safe to be here or outside, but purely presentational is fine)
-    const renderHeroCard = (item: MarketItem) => {
-        const isUp = item.change_rate >= 0;
-        const color = isUp ? '#22c55e' : '#ef4444';
-        const bgColor = isUp ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+    // Helper for Inflation Value based on Source
+    const getInflationValue = () => {
+        if (!indicators) return 0;
+        let val = 0;
+        switch (inflationSource) {
+            case 'ENAG': val = indicators.inflation.enag.value; break;
+            case 'İTO': val = indicators.inflation.ito.value; break;
+            default: val = indicators.inflation.tuik.value; break;
+        }
+        return val ?? 0;
+    };
 
-        const chartData = (item.chart_data && item.chart_data.length > 0)
-            ? item.chart_data
-            : [{ value: item.price }, { value: item.price }];
-
-        return (
-            <View key={item.id} className="w-48 h-32 bg-[#151C2F] rounded-2xl border border-white/5 mr-4 p-3 justify-between overflow-hidden relative">
-                <View className="absolute right-0 top-0 bottom-0 w-24 opacity-20" style={{ backgroundColor: bgColor }} />
-                <View className="flex-row justify-between items-start z-10">
-                    <Text className="text-white font-bold text-lg">{item.name}</Text>
-                    <View className={`flex-row items-center gap-1 px-1.5 py-0.5 rounded ${isUp ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-                        {isUp ? <TrendingUp size={10} color={color} /> : <TrendingDown size={10} color={color} />}
-                        <Text className={`text-[10px] font-bold ${isUp ? 'text-green-500' : 'text-red-500'}`}>%{Math.abs(item.change_rate).toFixed(2)}</Text>
-                    </View>
-                </View>
-                <View className="absolute bottom-0 left-0 right-0 h-16 opacity-80" pointerEvents="none">
-                    <LineChart
-                        data={chartData}
-                        height={50}
-                        width={180}
-                        hideDataPoints
-                        hideAxesAndRules
-                        hideYAxisText
-                        hideRules
-                        thickness={2}
-                        color={color}
-                        startFillColor={color}
-                        endFillColor={color}
-                        startOpacity={0.2}
-                        endOpacity={0.0}
-                        areaChart
-                        curved
-                        adjustToWidth
-                    />
-                </View>
-                <View className="z-10 mt-auto">
-                    <Text className="text-white text-xl font-bold tracking-tight">
-                        {item.price.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}
-                    </Text>
-                </View>
-            </View>
-        );
+    // Cycle Inflation Source
+    const cycleInflationSource = () => {
+        if (inflationSource === 'TÜİK') setInflationSource('ENAG');
+        else if (inflationSource === 'ENAG') setInflationSource('İTO');
+        else setInflationSource('TÜİK');
     };
 
     // Calculate Converter Result
@@ -179,16 +170,63 @@ export default function MarketsScreen() {
                         </View>
                     ) : (
                         <>
-                            {/* --- Hero Section --- */}
-                            <Text className="text-slate-300 text-sm font-bold mb-3 uppercase tracking-wider">Vitrin</Text>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                className="mb-8"
-                                contentContainerStyle={{ paddingRight: 20 }}
-                            >
-                                {heroItems.map(item => renderHeroCard(item))}
-                            </ScrollView>
+                            {/* --- ECONOMIC INDICATORS SECTION (New) --- */}
+                            <View className="mb-6">
+                                <Text className="text-slate-300 text-sm font-bold mb-3 uppercase tracking-wider">Ekonomik Göstergeler</Text>
+                                <View className="flex-row gap-3">
+                                    {/* 1. Asgari Ücret */}
+                                    <View className="flex-1 bg-[#151C2F] rounded-xl p-3 border border-slate-800/50 justify-between min-h-[100px]">
+                                        <View className="flex-row justify-between items-start">
+                                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">NET ASGARİ ÜCRET</Text>
+                                            <View className="bg-green-500/10 p-1 rounded-md">
+                                                <TrendingUp size={12} color="#22c55e" />
+                                            </View>
+                                        </View>
+                                        <View>
+                                            <Text className="text-white text-base font-bold">
+                                                {indicators ? indicators.minWage.value.toLocaleString('tr-TR') : '...'} ₺
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {/* 2. Açlık Sınırı */}
+                                    <View className="flex-1 bg-[#151C2F] rounded-xl p-3 border border-slate-800/50 justify-between min-h-[100px]">
+                                        <View className="flex-row justify-between items-start">
+                                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">AÇLIK SINIRI</Text>
+                                            <View className="bg-red-500/10 p-1 rounded-md">
+                                                <TrendingUp size={12} color="#ef4444" />
+                                            </View>
+                                        </View>
+                                        <View>
+                                            <Text className="text-white text-base font-bold">
+                                                {indicators ? indicators.hunger.value.toLocaleString('tr-TR') : '...'} ₺
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {/* 3. Enflasyon (Dynamic) */}
+                                    <TouchableOpacity
+                                        activeOpacity={0.7}
+                                        onPress={cycleInflationSource}
+                                        className="flex-1 bg-[#151C2F] rounded-xl p-3 border border-slate-800/50 justify-between min-h-[100px]"
+                                    >
+                                        <View className="flex-row justify-between items-center">
+                                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">{inflationSource} ENFLASYON</Text>
+                                            <View className="bg-blue-500/20 px-1 py-0.5 rounded flex-row items-center">
+                                                <Text className="text-blue-400 text-[8px] font-bold">DEĞİŞTIREBİLİRSİN</Text>
+                                            </View>
+                                        </View>
+                                        <View>
+                                            <Text className="text-white text-base font-bold">
+                                                %{indicators ? getInflationValue().toFixed(2) : '...'}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* --- Living Standards Chart (New) --- */}
+                            <LivingStandardsChart data={chartHistory} loading={loading && chartHistory.length === 0} />
 
                             {/* --- Grid Overview --- */}
                             <Text className="text-slate-300 text-sm font-bold mb-3 uppercase tracking-wider">Piyasa Genel Bakış</Text>

@@ -2,8 +2,8 @@ import InflationChart from '@/components/InflationChart';
 import { AutoSummary, getAutoSummary } from '@/lib/autoService';
 import { getHousingSummary, HousingSummary } from '@/lib/housingService';
 import { getTuikSummary, TuikSummary } from '@/lib/inflationService';
+import { fetchMarketData, MarketItem } from '@/lib/marketService';
 import { supabase } from '@/lib/supabase';
-import { ExchangeRates, fetchExchangeRates } from '@/lib/tcmb';
 import { ViewInflationCalculated, ViewLivingStandards } from '@/types/database';
 import { ArrowUpRight, BarChart3, Building2, Car, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -16,7 +16,8 @@ export default function DashboardScreen() {
   const [inflationData, setInflationData] = useState<ViewInflationCalculated[]>([]);
   // Living standards data logic kept but not used in UI as per design request - kept for future use if needed
   const [livingStandardsData, setLivingStandardsData] = useState<ViewLivingStandards[]>([]);
-  const [rates, setRates] = useState<ExchangeRates | null>(null);
+
+  const [marketData, setMarketData] = useState<MarketItem[]>([]);
   const [inflationSummary, setInflationSummary] = useState<TuikSummary | null>(null);
   const [housingSummary, setHousingSummary] = useState<HousingSummary | null>(null);
   const [autoSummary, setAutoSummary] = useState<AutoSummary | null>(null);
@@ -29,7 +30,7 @@ export default function DashboardScreen() {
     try {
       setLoading(true);
 
-      const [inflationRes, livingStandardsRes, tcmbRes, tuikRes, housingRes, autoRes] = await Promise.all([
+      const [inflationRes, livingStandardsRes, marketRes, tuikRes, housingRes, autoRes] = await Promise.all([
         supabase
           .from('view_inflation_calculated')
           .select('*')
@@ -40,7 +41,7 @@ export default function DashboardScreen() {
           .select('*')
           .order('reference_date', { ascending: false })
           .limit(24),
-        fetchExchangeRates(),
+        fetchMarketData(),
         getTuikSummary(),
         getHousingSummary(),
         getAutoSummary()
@@ -59,8 +60,8 @@ export default function DashboardScreen() {
         setLivingStandardsData(livingStandardsRes.data || []);
       }
 
-      if (tcmbRes) {
-        setRates(tcmbRes);
+      if (marketRes) {
+        setMarketData(marketRes);
       }
 
       if (tuikRes && tuikRes.data) {
@@ -100,6 +101,14 @@ export default function DashboardScreen() {
     }
   };
 
+  // Helper to find market item by ID or Symbol
+  // Assuming IDs: 1=USD, 2=EUR, 3=Gold, 4=BIST based on markets.tsx
+  const getItem = (id: number) => marketData.find(m => m.id === id);
+  const usdItem = getItem(1);
+  const eurItem = getItem(2);
+  const goldItem = getItem(3);
+  const bistItem = getItem(4);
+
   return (
     <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
@@ -127,43 +136,43 @@ export default function DashboardScreen() {
           >
             <MarketCard
               title="Dolar/TL"
-              value={rates?.USD ? `${rates.USD.price.toFixed(2).replace('.', ',')}` : '...'}
+              value={usdItem ? `${usdItem.price.toFixed(2).replace('.', ',')}` : '...'}
               icon={DollarSign}
-              trend={rates?.USD && rates.USD.rate < 0 ? 'down' : 'up'}
+              trend={usdItem && usdItem.change_rate < 0 ? 'down' : 'up'}
               loading={loading}
-              percentage={rates?.USD ? `${Math.abs(rates.USD.rate).toFixed(2)}%` : ''}
-              showPercentage={!!rates?.USD}
+              percentage={usdItem ? `${Math.abs(usdItem.change_rate).toFixed(2)}%` : ''}
+              showPercentage={!!usdItem}
               iconColor="#22c55e"
             />
             <MarketCard
               title="Euro/TL"
-              value={rates?.EUR ? `${rates.EUR.price.toFixed(2).replace('.', ',')}` : '...'}
+              value={eurItem ? `${eurItem.price.toFixed(2).replace('.', ',')}` : '...'}
               icon={Euro}
-              trend={rates?.EUR && rates.EUR.rate < 0 ? 'down' : 'up'}
+              trend={eurItem && eurItem.change_rate < 0 ? 'down' : 'up'}
               loading={loading}
-              percentage={rates?.EUR ? `${Math.abs(rates.EUR.rate).toFixed(2)}%` : ''}
-              showPercentage={!!rates?.EUR}
+              percentage={eurItem ? `${Math.abs(eurItem.change_rate).toFixed(2)}%` : ''}
+              showPercentage={!!eurItem}
               iconColor="#3b82f6"
             />
             <MarketCard
               title="Altın (Gr)"
-              value={rates?.Gold ? `${rates.Gold.price.toLocaleString('tr-TR')}` : '...'}
+              value={goldItem ? `${goldItem.price.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : '...'}
               icon={Coins}
-              trend={rates?.Gold && rates.Gold.rate < 0 ? 'down' : 'up'}
+              trend={goldItem && goldItem.change_rate < 0 ? 'down' : 'up'}
               loading={loading}
-              percentage={rates?.Gold ? `${Math.abs(rates.Gold.rate).toFixed(2)}%` : ''}
-              showPercentage={!!rates?.Gold}
+              percentage={goldItem ? `${Math.abs(goldItem.change_rate).toFixed(2)}%` : ''}
+              showPercentage={!!goldItem}
               iconColor="#fbbf24"
             />
             <MarketCard
               title="BIST 100"
-              value={rates?.BIST100 ? `${rates.BIST100.price}` : '...'}
+              value={bistItem ? `${bistItem.price.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : '...'}
               icon={BarChart3}
-              trend={rates?.BIST100 && rates.BIST100.rate < 0 ? 'down' : 'up'}
+              trend={bistItem && bistItem.change_rate < 0 ? 'down' : 'up'}
               loading={loading}
-              percentage={rates?.BIST100 ? `${Math.abs(rates.BIST100.rate).toFixed(2)}%` : ''}
-              showPercentage={true}
-              iconColor={rates?.BIST100 && rates.BIST100.rate < 0 ? '#f87171' : '#4ade80'}
+              percentage={bistItem ? `${Math.abs(bistItem.change_rate).toFixed(2)}%` : ''}
+              showPercentage={!!bistItem}
+              iconColor={bistItem && bistItem.change_rate < 0 ? '#f87171' : '#4ade80'}
             />
           </ScrollView>
         </View>
@@ -188,12 +197,21 @@ export default function DashboardScreen() {
                 </View>
               ) : (
                 <View>
-                  <Text className="text-white text-4xl font-bold mb-1">
+                  <Text className="text-white text-4xl font-bold mb-2">
                     %{inflationSummary.rate.toFixed(1)}
                   </Text>
-                  <Text className={`text-sm font-medium ${inflationSummary.direction === 'up' ? 'text-green-500' : inflationSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'}`}>
-                    {inflationSummary.direction === 'up' ? '+' : ''}{inflationSummary.change}% <Text className="text-slate-500">geçen aya göre</Text>
-                  </Text>
+
+                  {/* Inverted Logic: Inflation UP -> RED (Bad), DOWN -> GREEN (Good) */}
+                  <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${inflationSummary.direction === 'up' ? 'bg-red-500/20' : inflationSummary.direction === 'down' ? 'bg-green-500/20' : 'bg-slate-700/20'}`}>
+                    {inflationSummary.direction === 'up' ? (
+                      <TrendingUp size={12} color="#ef4444" />
+                    ) : inflationSummary.direction === 'down' ? (
+                      <TrendingDown size={12} color="#22c55e" />
+                    ) : null}
+                    <Text className={`${inflationSummary.direction === 'up' ? 'text-red-400' : inflationSummary.direction === 'down' ? 'text-green-400' : 'text-slate-400'} text-xs font-bold`}>
+                      {inflationSummary.direction === 'up' ? '+' : ''}{inflationSummary.change} puan
+                    </Text>
+                  </View>
                 </View>
               )}
             </View>
@@ -228,13 +246,22 @@ export default function DashboardScreen() {
                 <View className="h-4 w-16 bg-slate-800 rounded-md animate-pulse" />
               </View>
             ) : (
-              <View className="flex-row items-baseline gap-2">
+              <View className="flex-row items-center gap-2">
                 <Text className="text-white text-2xl font-bold">
                   {housingSummary.total_sales.toLocaleString('tr-TR')}
                 </Text>
-                <Text className={`${housingSummary.direction === 'up' ? 'text-green-500' : housingSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-xs font-bold`}>
-                  {housingSummary.direction === 'up' ? '+' : ''}%{housingSummary.percent_change}
-                </Text>
+                <View className={`px-2 py-0.5 rounded-full ${housingSummary.direction === 'up' ? 'bg-green-500/20' : housingSummary.direction === 'down' ? 'bg-red-500/20' : 'bg-slate-700/20'}`}>
+                  <View className="flex-row items-center gap-1">
+                    {housingSummary.direction === 'up' ? (
+                      <TrendingUp size={10} color="#22c55e" />
+                    ) : housingSummary.direction === 'down' ? (
+                      <TrendingDown size={10} color="#ef4444" />
+                    ) : null}
+                    <Text className={`${housingSummary.direction === 'up' ? 'text-green-500' : housingSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-xs font-bold`}>
+                      %{housingSummary.percent_change}
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
           </View>
@@ -260,22 +287,29 @@ export default function DashboardScreen() {
                 <View className="h-4 w-16 bg-slate-800 rounded-md animate-pulse" />
               </View>
             ) : (
-              <View className="flex-row items-baseline gap-2">
+              <View className="flex-row items-center gap-2">
                 <Text className="text-white text-2xl font-bold">
                   {autoSummary.total_sales.toLocaleString('tr-TR')}
                 </Text>
-                <Text className={`${autoSummary.direction === 'up' ? 'text-green-500' : autoSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-xs font-bold`}>
-                  {autoSummary.direction === 'up' ? '+' : ''}%{autoSummary.percent_change}
-                </Text>
+                <View className={`px-2 py-0.5 rounded-full ${autoSummary.direction === 'up' ? 'bg-green-500/20' : autoSummary.direction === 'down' ? 'bg-red-500/20' : 'bg-slate-700/20'}`}>
+                  <View className="flex-row items-center gap-1">
+                    {autoSummary.direction === 'up' ? (
+                      <TrendingUp size={10} color="#22c55e" />
+                    ) : autoSummary.direction === 'down' ? (
+                      <TrendingDown size={10} color="#ef4444" />
+                    ) : null}
+                    <Text className={`${autoSummary.direction === 'up' ? 'text-green-500' : autoSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-xs font-bold`}>
+                      %{autoSummary.percent_change}
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
           </View>
         </View>
 
         {/* --- Advanced Inflation Chart --- */}
-        <View className="mb-6 flex-row justify-between items-center">
-          <Text className="text-white text-lg font-bold">Enflasyon Trendi</Text>
-        </View>
+
 
         <View className="mb-24">
           <InflationChart data={inflationData} loading={loading} />

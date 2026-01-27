@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Briefcase, Eye, EyeOff, Plus, TrendingDown, TrendingUp } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import {

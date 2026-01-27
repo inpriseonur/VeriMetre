@@ -1,3 +1,4 @@
+import { ViewLivingStandards } from '@/types/database';
 import { supabase } from './supabase';
 
 export interface MarketItem {
@@ -41,6 +42,8 @@ export const fetchMarketData = async (): Promise<MarketItem[] | null> => {
 
 // ... (existing exports)
 
+// ... (existing exports)
+
 export interface FundItem {
     fund_code: string;       // e.g. "AFT"
     title: string;      // e.g. "Ak Portföy Yeni Teknolojiler..."
@@ -69,6 +72,119 @@ export const searchFunds = async (query: string): Promise<FundItem[]> => {
         return data as FundItem[];
     } catch (err) {
         console.error('Exception in searchFunds:', err);
+        return [];
+    }
+};
+
+// New decoupled interface
+export interface EconomicIndicators {
+    minWage: { value: number, reference_date: string };
+    hunger: { value: number, reference_date: string };
+    inflation: {
+        tuik: { value: number, reference_date: string };
+        enag: { value: number, reference_date: string };
+        ito: { value: number, reference_date: string };
+    };
+}
+
+export const getEconomicIndicators = async (): Promise<EconomicIndicators | null> => {
+    try {
+        // 1. Get Base Data (Wage & Hunger) - Latest available
+        const { data: baseData, error: baseError } = await supabase
+            .from('view_living_standards')
+            .select('*')
+            .order('reference_date', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (baseError) {
+            console.error('getEconomicIndicators base error:', baseError);
+            return null;
+        }
+
+        // 2. Get Inflation Data - Fetch separately to find latest NON-NULL for each
+        // We run these in parallel for speed
+        const [tuikRes, enagRes, itoRes] = await Promise.all([
+            // TUIK
+            supabase
+                .from('view_living_standards')
+                .select('inflation_tuik, reference_date')
+                .not('inflation_tuik', 'is', null)
+                .order('reference_date', { ascending: false })
+                .limit(1)
+                .single(),
+            // ENAG
+            supabase
+                .from('view_living_standards')
+                .select('inflation_enag, reference_date')
+                .not('inflation_enag', 'is', null)
+                .order('reference_date', { ascending: false })
+                .limit(1)
+                .single(),
+            // ITO
+            supabase
+                .from('view_living_standards')
+                .select('inflation_ito, reference_date')
+                .not('inflation_ito', 'is', null)
+                .order('reference_date', { ascending: false })
+                .limit(1)
+                .single()
+        ]);
+
+        return {
+            minWage: {
+                value: baseData.current_min_wage,
+                reference_date: baseData.reference_date
+            },
+            hunger: {
+                value: baseData.hunger_threshold,
+                reference_date: baseData.reference_date
+            },
+            inflation: {
+                tuik: {
+                    value: tuikRes.data?.inflation_tuik || 0,
+                    reference_date: tuikRes.data?.reference_date || baseData.reference_date
+                },
+                enag: {
+                    value: enagRes.data?.inflation_enag || 0,
+                    reference_date: enagRes.data?.reference_date || baseData.reference_date
+                },
+                ito: {
+                    value: itoRes.data?.inflation_ito || 0,
+                    reference_date: itoRes.data?.reference_date || baseData.reference_date
+                }
+            }
+        };
+
+    } catch (err) {
+        console.error('getEconomicIndicators exception:', err);
+        return null;
+    }
+};
+
+// Deprecated but kept for backward compatibility if needed, though we will replace usage
+export const getLatestLivingStandards = async (): Promise<ViewLivingStandards | null> => {
+    return null; // Disabled in favor of getEconomicIndicators
+};
+
+export const getLivingStandardsHistory = async (limit: number = 13): Promise<ViewLivingStandards[]> => {
+    try {
+        // Fetch last N months descending (latest first)
+        const { data, error } = await supabase
+            .from('view_living_standards')
+            .select('*')
+            .order('reference_date', { ascending: false })
+            .limit(limit);
+
+        if (error) {
+            console.error('getLivingStandardsHistory error:', error);
+            return [];
+        }
+
+        // Reverse to have chronological order (Jan -> Dec)
+        return (data || []).reverse();
+    } catch (err) {
+        console.error('getLivingStandardsHistory exception:', err);
         return [];
     }
 };

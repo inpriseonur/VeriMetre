@@ -38,6 +38,11 @@ export interface ViewLivingStandards {
     reference_date: string;
     hunger_threshold: number;
     current_min_wage: number;
+    inflation_tuik: number;
+    inflation_enag: number;
+    inflation_ito: number;
+    min_wage_usd_real?: number;
+    min_wage_gold_real?: number;
 }
 
 export interface DataSource {

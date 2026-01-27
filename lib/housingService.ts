@@ -321,36 +321,38 @@ export interface RealEstateSupplyStats {
 
 export const getRealEstateSupplyStats = async (): Promise<{ data: RealEstateSupplyStats | null; source: 'cache' | 'rpc' }> => {
     try {
-        const cachedString = await AsyncStorage.getItem(REAL_ESTATE_SUPPLY_CACHE_KEY);
-        let cachedData: RealEstateSupplyStats | null = null;
+        const CACHE_DURATION = 30 * 60 * 1000; // 30 Minutes
+        const fetchTimeKey = `${REAL_ESTATE_SUPPLY_CACHE_KEY}_time`;
 
+        const cachedString = await AsyncStorage.getItem(REAL_ESTATE_SUPPLY_CACHE_KEY);
+        const lastFetchTimeStr = await AsyncStorage.getItem(fetchTimeKey);
+
+        let cachedData: RealEstateSupplyStats | null = null;
         if (cachedString) {
             cachedData = JSON.parse(cachedString);
         }
 
-        const freshDate = await checkHousingFreshness();
+        const now = Date.now();
+        const lastFetchTime = lastFetchTimeStr ? parseInt(lastFetchTimeStr, 10) : 0;
+        const isCacheExpired = !cachedData || (now - lastFetchTime > CACHE_DURATION);
 
-        if (!freshDate) {
-            return { data: cachedData, source: 'cache' };
-        }
-
-        const isCacheStale = !cachedData || (new Date(freshDate) > new Date(cachedData.listings.reference_date));
-
-        if (isCacheStale) {
-            console.log('🏗️ Arz ve Gelecek Cache bayatlamış. RPC çağrılıyor...');
+        if (isCacheExpired) {
+            console.log('🏗️ Arz ve Gelecek Cache süresi dolmuş. RPC çağrılıyor...');
             const { data, error } = await supabase.rpc('get_real_estate_supply_stats');
 
             if (error || !data) {
                 console.error('Arz RPC Hatası:', error);
+                // Return cache if RPC fails
                 return { data: cachedData, source: 'cache' };
             }
 
             const newData: RealEstateSupplyStats = data as RealEstateSupplyStats;
             await AsyncStorage.setItem(REAL_ESTATE_SUPPLY_CACHE_KEY, JSON.stringify(newData));
+            await AsyncStorage.setItem(fetchTimeKey, now.toString());
 
             return { data: newData, source: 'rpc' };
         } else {
-            console.log('✅ Arz ve Gelecek Cache güncel.');
+            console.log('✅ Arz ve Gelecek Cache güncel (Time-based).');
             return { data: cachedData, source: 'cache' };
         }
 

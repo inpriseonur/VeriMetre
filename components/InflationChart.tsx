@@ -148,13 +148,13 @@ export default function InflationChart({ data, loading }: InflationChartProps) {
     };
 
     return (
-        <View className="bg-slate-800 rounded-2xl p-4 shadow-sm shadow-black border border-slate-700 w-full">
+        <View className="bg-[#151C2F] rounded-2xl p-4 border border-slate-800/50 w-full">
             {/* Header & Toggle */}
-            <View className="flex-row items-center justify-end mb-6">
-                {/* Title removed */}
+            <View className="flex-row items-center justify-between mb-6">
+                <Text className="text-white text-lg font-bold">Enflasyon Trendi</Text>
 
                 {/* Simple Segmented Control */}
-                <View className="flex-row bg-slate-900 rounded-lg p-1 border border-slate-700">
+                <View className="flex-row bg-slate-800 rounded-lg p-1">
                     <ToggleOption title="Aylık" isActive={mode === 'monthly'} onPress={() => setMode('monthly')} />
                     <ToggleOption title="Yıllık" isActive={mode === 'yearly'} onPress={() => setMode('yearly')} />
                     <ToggleOption title="Bu Yıl" isActive={mode === 'ytd'} onPress={() => setMode('ytd')} />
@@ -220,9 +220,9 @@ function ToggleOption({ title, isActive, onPress }: { title: string, isActive: b
     return (
         <TouchableOpacity
             onPress={onPress}
-            className={`px-3 py-1.5 rounded-md ${isActive ? 'bg-slate-700' : 'bg-transparent'}`}
+            className={`px-3 py-1.5 rounded-md ${isActive ? 'bg-blue-600' : 'bg-transparent'}`}
         >
-            <Text className={`text-xs font-medium ${isActive ? 'text-white' : 'text-slate-400'}`}>
+            <Text className={`text-xs font-bold ${isActive ? 'text-white' : 'text-slate-400'}`}>
                 {title}
             </Text>
         </TouchableOpacity>
