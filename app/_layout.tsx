@@ -16,10 +16,18 @@ import { AuthProvider } from '@/providers/AuthProvider';
 import { LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { useEffect } from 'react';
+
 LogBox.ignoreLogs(['Unable to activate keep awake']);
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    // Lock to portrait by default
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

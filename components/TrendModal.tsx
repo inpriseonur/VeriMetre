@@ -4,15 +4,14 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
 import { Building2, Check, ChevronDown, LandPlot, Lock, Search, X } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { FlatList, Modal, StatusBar as RNStatusBar, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 
 export interface TrendDataPoint {
-    label: string;      // X-Axis Label (e.g. 'Oca 24')
-    value: number;      // Main Value (Y-Axis)
-    subValue?: number;  // Secondary Value (e.g. m2 or previous year)
-    date: string;       // Full date for tooltip
-    // Optional extras for specific modes
+    label: string;
+    value: number;
+    subValue?: number;
+    date: string;
     permit_count?: number;
     avg_m2?: number;
 }
@@ -26,49 +25,39 @@ export interface TrendModalProps {
     isAuthenticated: boolean;
     onLogin?: () => void;
     onUpgrade?: () => void;
-
-    // Filter Config
     filterType?: 'DATE_RANGE' | 'AGGREGATION';
-
-    // Aggregation mode props
     showCityFilter?: boolean;
     selectedCity?: string;
     onCityChange?: (city: string) => void;
     selectedPeriod?: 'monthly' | 'yearly';
     onPeriodChange?: (period: 'monthly' | 'yearly') => void;
-
-    // Simplified Mode
     hideFilters?: boolean;
 }
 
 export default function TrendModal({
     visible, onClose, title, data, isPremium, isAuthenticated,
-    onLogin, onUpgrade,
-    filterType = 'DATE_RANGE',
+    onLogin, onUpgrade, filterType = 'DATE_RANGE',
     showCityFilter, selectedCity, onCityChange,
-    selectedPeriod, onPeriodChange,
-    hideFilters = false
+    selectedPeriod, onPeriodChange, hideFilters = false
 }: TrendModalProps) {
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
-    const [activeTab, setActiveTab] = useState<'PRIMARY' | 'SECONDARY'>('PRIMARY'); // Generalized from COUNT/AVG_M2
+    const [activeTab, setActiveTab] = useState<'PRIMARY' | 'SECONDARY'>('PRIMARY');
     const [timeFilter, setTimeFilter] = useState<'1Y' | '3Y' | 'ALL'>('1Y');
 
-    // City Filter State
+    // ... (City Filter State skipped, unchanged)
     const [cityList, setCityList] = useState<CityItem[]>([]);
     const [isCitySelectorVisible, setCitySelectorVisible] = useState(false);
     const [citySearchQuery, setCitySearchQuery] = useState('');
 
+    // ... (City useEffects unchanged)
     useEffect(() => {
         if (showCityFilter) {
             getActiveCities().then(cities => {
-                // Ensure TR is at top
                 const hasTR = cities.find(c => c.city_code === 'TR');
                 let list = cities;
                 if (!hasTR) {
                     list = [{ city_code: 'TR', city_name: 'Türkiye Geneli' }, ...cities];
                 } else {
-                    // Move TR to top if exists but not first? 
-                    // Usually API handled, but safe to force.
                     list = [{ city_code: 'TR', city_name: 'Türkiye Geneli' }, ...cities.filter(c => c.city_code !== 'TR')];
                 }
                 setCityList(list);
@@ -89,65 +78,47 @@ export default function TrendModal({
     }, [cityList, selectedCity]);
 
     useEffect(() => {
-        // Force Landscape
-        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        const lockOrientation = async () => {
+            try {
+                await ScreenOrientation.unlockAsync();
+                await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+            } catch (error) {
+                console.warn('Orientation lock failed:', error);
+            }
+        };
 
-        // Listener to re-enforce StatusBar hidden if orientation causes it to show
-        const subscription = ScreenOrientation.addOrientationChangeListener(() => {
-            // Re-assert hidden on any orientation shift
-            // Using standard RN StatusBar for imperative call as backup, 
-            // even though we use expo-status-bar component for declarative.
-            // But expo-status-bar calls are usually declarative.
-            // Let's force a state update if needed, but simple re-render might process.
-            // Actually, imperative setHidden is safest here.
-        });
+        RNStatusBar.setHidden(true, 'slide');
+        lockOrientation();
 
         return () => {
-            ScreenOrientation.removeOrientationChangeListener(subscription);
-            ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+            const unlockOrientation = async () => {
+                try {
+                    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                    RNStatusBar.setHidden(false, 'slide');
+                } catch (error) {
+                    console.warn('Orientation unlock failed:', error);
+                }
+            };
+            unlockOrientation();
         };
     }, []);
 
-    // --- Filter Logic ---
     const filteredData = useMemo(() => {
         if (!data || data.length === 0) return [];
-
         let processedData = [...data];
-
-        // Date Range Filtering (Only applies if NOT in Aggregation mode or strict date mode)
-        // Actually, sometimes even in aggregation mode we might want to limit visualized points?
-        // But for Sales Trend (Aggregation), the backend handles content.
 
         if (filterType === 'DATE_RANGE') {
             let months = processedData.length;
             if (timeFilter === '1Y') months = 12;
             if (timeFilter === '3Y') months = 36;
-
-            // Standard Logic: Input is Newest First (Descending) from API/State
-            // We want the most recent N months.
-            // slice(0, N) takes the top N (Newest).
-            // .reverse() puts them in Chronological Order (Oldest -> Newest) for Chart.
             processedData = processedData.slice(0, months).reverse();
-        } else {
-            // Aggregation mode: API returns ready-to-display chronological order usually?
-            // Let's assume passed data is already chronological for Aggregation, or check data.
-            // If data comes from getHousingSalesChartData, it might be chrono.
-            // We can check generic parsing logic later.
-            // For now, trust the input order or reverse if needed.
-            // If Sales Trend, we probably want NO reversing if API sends chronological.
         }
-
         return processedData;
     }, [data, timeFilter, filterType]);
 
-    // --- Chart Data Preparation ---
     const chartData = useMemo(() => {
         const threshold = selectedPeriod === 'monthly' ? 12 : 3;
         return filteredData.map((d, index) => {
-            // Determine value based on activeTab (for Permits: Count vs M2)
-            // For Sales: Only Value usually.
-
-            // Heuristic compatibility
             let val = d.value;
             if (d.permit_count !== undefined && activeTab === 'PRIMARY') val = d.permit_count;
             if (d.avg_m2 !== undefined && activeTab === 'SECONDARY') val = d.avg_m2;
@@ -157,7 +128,7 @@ export default function TrendModal({
                 label: index % Math.ceil(filteredData.length / 6) === 0 ? d.label : '',
                 dataPointText: '',
                 date: d.date || d.label,
-                isNearRightEdge: index >= filteredData.length - threshold, // Dynamic threshold
+                isNearRightEdge: index >= filteredData.length - threshold,
             };
         });
     }, [filteredData, activeTab, selectedPeriod]);
@@ -167,78 +138,69 @@ export default function TrendModal({
         return max > 0 ? max * 1.2 : 100;
     }, [chartData]);
 
+    const pointerConfig = useMemo(() => ({
+        pointerStripUptoDataPoint: true,
+        pointerStripColor: 'rgba(255,255,255,0.2)',
+        pointerStripWidth: 2,
+        strokeDashArray: [2, 5],
+        pointerColor: 'white',
+        radius: 4,
+        pointerLabelWidth: 100,
+        pointerLabelHeight: 120,
+        activatePointersOnLongPress: true,
+        autoAdjustPointerLabelPosition: false,
+        pointerLabelComponent: (items: any) => {
+            const item = items?.[0];
+            if (!item || item.value == null) return null;
+            const isRightEdge = item.isNearRightEdge;
 
+            return (
+                <View style={{
+                    height: 60,
+                    width: 100,
+                    backgroundColor: '#1e293b',
+                    borderRadius: 8,
+                    justifyContent: 'center',
+                    paddingLeft: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    transform: [{ translateX: isRightEdge ? -120 : 0 }]
+                }}>
+                    <Text style={{ color: 'lightgray', fontSize: 10, marginBottom: 2 }}>{item.date}</Text>
+                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>
+                        {item.value.toLocaleString('tr-TR')}
+                    </Text>
+                </View>
+            );
+        },
+    }), []);
 
-    const renderChart = () => {
-        // Calculate dynamic width
-        // Modal Padding (px-5 = 20px * 2 = 40px) + Container Padding (p-4 = 16px * 2 = 32px) = 72px reserved.
-        // Y-Axis Label width approx 40-50px.
-        // Let's use a safe width calculation.
-        const chartWidth = SCREEN_WIDTH - 80;
-
-        return (
-            <View style={{ alignItems: 'center', width: '100%' }}>
-                <LineChart
-                    areaChart
-                    data={chartData}
-                    height={SCREEN_HEIGHT * 0.55}
-                    width={chartWidth}
-                    // Dynamic Spacing to fill the width
-                    spacing={chartData.length > 1 ? (chartWidth - 40) / (chartData.length - 1) : chartWidth / 2}
-                    initialSpacing={20}
-                    endSpacing={20}
-                    color={activeTab === 'PRIMARY' ? "#3b82f6" : "#22c55e"}
-                    startFillColor={activeTab === 'PRIMARY' ? "#3b82f6" : "#22c55e"}
-                    startOpacity={0.2}
-                    endOpacity={0.05}
-                    thickness={3}
-                    hideRules
-                    hideYAxisText={false}
-                    yAxisTextStyle={{ color: '#64748b', fontSize: 10 }}
-                    xAxisLabelTextStyle={{ color: 'gray', fontSize: 10, width: 60, textAlign: 'center' }}
-                    noOfSections={4}
-                    maxValue={maxValue}
-                    pointerConfig={{
-                        pointerStripUptoDataPoint: true,
-                        pointerStripColor: 'rgba(255,255,255,0.2)',
-                        pointerStripWidth: 2,
-                        strokeDashArray: [2, 5],
-                        pointerColor: 'white',
-                        radius: 4,
-                        pointerLabelWidth: 100,
-                        pointerLabelHeight: 120,
-                        activatePointersOnLongPress: true,
-                        autoAdjustPointerLabelPosition: false,
-                        pointerLabelComponent: (items: any) => {
-                            const item = items?.[0];
-                            if (!item || item.value == null) return null;
-
-                            const isRightEdge = item.isNearRightEdge;
-
-                            return (
-                                <View style={{
-                                    height: 60,
-                                    width: 100,
-                                    backgroundColor: '#1e293b',
-                                    borderRadius: 8,
-                                    justifyContent: 'center',
-                                    paddingLeft: 12,
-                                    borderWidth: 1,
-                                    borderColor: 'rgba(255,255,255,0.1)',
-                                    transform: [{ translateX: isRightEdge ? -120 : 0 }] // Shift left for last points
-                                }}>
-                                    <Text style={{ color: 'lightgray', fontSize: 10, marginBottom: 2 }}>{item.date}</Text>
-                                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>
-                                        {item.value.toLocaleString('tr-TR')}
-                                    </Text>
-                                </View>
-                            );
-                        },
-                    }}
-                />
-            </View>
-        );
-    };
+    const chartWidth = SCREEN_WIDTH - 80;
+    const renderChart = () => (
+        <View style={{ alignItems: 'center', width: '100%' }}>
+            <LineChart
+                areaChart
+                data={chartData}
+                height={SCREEN_HEIGHT * 0.55}
+                width={chartWidth}
+                spacing={chartData.length > 1 ? (chartWidth - 40) / (chartData.length - 1) : chartWidth / 2}
+                initialSpacing={20}
+                endSpacing={20}
+                color={activeTab === 'PRIMARY' ? "#3b82f6" : "#22c55e"}
+                startFillColor={activeTab === 'PRIMARY' ? "#3b82f6" : "#22c55e"}
+                startOpacity={0.2}
+                endOpacity={0.05}
+                thickness={3}
+                hideRules
+                hideYAxisText={false}
+                yAxisTextStyle={{ color: '#64748b', fontSize: 10 }}
+                xAxisLabelTextStyle={{ color: 'gray', fontSize: 10, width: 60, textAlign: 'center' }}
+                noOfSections={4}
+                maxValue={maxValue}
+                pointerConfig={pointerConfig}
+            />
+        </View>
+    );
 
     return (
         <Modal

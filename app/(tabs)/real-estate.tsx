@@ -391,7 +391,7 @@ export default function RealEstateScreen() {
                                     </View>
                                     <View>
                                         <Text className="text-slate-500 text-[10px] mb-0.5 font-medium uppercase">{getFormattedDate(headerStats.sales_card.reference_date)}</Text>
-                                        <Text className="text-white text-xl font-bold mb-1">{formatNumber(headerStats.sales_card.value)}</Text>
+                                        <Text className="text-white text-2xl font-bold mb-1">{formatNumber(headerStats.sales_card.value)}</Text>
 
                                         {/* Logic: UP -> GREEN (Good) */}
                                         <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${headerStats.sales_card.direction === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'} `}>
@@ -858,9 +858,9 @@ export default function RealEstateScreen() {
                                             <Text className="text-white font-bold text-base">Yeni Konut İzni</Text>
                                             <TouchableOpacity
                                                 onPress={handleOpenTrendAnalysis}
-                                                className="bg-blue-600/20 p-1.5 rounded-md"
+                                                className="bg-slate-700/50 p-1.5 rounded-lg active:bg-slate-600"
                                             >
-                                                <Maximize2 size={12} color="#60a5fa" />
+                                                <Maximize2 size={12} color="#94a3b8" />
                                             </TouchableOpacity>
                                         </View>
                                         <Text className="text-slate-500 text-[10px]">
