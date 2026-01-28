@@ -493,3 +493,27 @@ export const getHousingPermitTrends = async (monthsBack: number = 24): Promise<{
         return { data: null, source: 'cache' };
     }
 };
+
+export interface SalesChartDataPoint {
+    display_date: string; // X-Axis Label (e.g., 'Oca 24' or '2023')
+    total_sales: number;  // Y-Axis Value
+}
+
+export const getHousingSalesChartData = async (cityCode: string = 'TR', period: 'monthly' | 'yearly' = 'monthly'): Promise<SalesChartDataPoint[]> => {
+    try {
+        const { data, error } = await supabase.rpc('get_housing_sales_chart_data', {
+            p_city_code: cityCode,
+            p_period: period
+        });
+
+        if (error) {
+            console.error('Sales Chart RPC Error:', error);
+            return [];
+        }
+
+        return data as SalesChartDataPoint[];
+    } catch (error) {
+        console.error('getHousingSalesChartData exception:', error);
+        return [];
+    }
+};

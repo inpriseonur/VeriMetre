@@ -1,8 +1,24 @@
 import TrendModal, { TrendDataPoint } from '@/components/TrendModal';
-import { CityItem, CityTrendData, getActiveCities, getCitySalesTrend, getHousingPermitTrends, getRealEstateHeader, getRealEstateMacroHistory, getRealEstateSupplyStats, getSalesBreakdown, RealEstateHeaderStats, RealEstateSalesBreakdown, RealEstateSupplyStats } from '@/lib/housingService';
+import {
+    CityItem,
+    CityTrendData,
+    getActiveCities,
+    getCitySalesTrend,
+    getHousingPermitTrends,
+    getHousingSalesChartData,
+    getHousingSummary,
+    getRealEstateHeader,
+    getRealEstateMacroHistory,
+    getRealEstateSupplyStats,
+    getSalesBreakdown,
+    RealEstateHeaderStats,
+    RealEstateMacroData,
+    RealEstateSalesBreakdown,
+    RealEstateSupplyStats
+} from '@/lib/housingService';
 import { useAuth } from '@/providers/AuthProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Check, Home, Info, Key, Lightbulb, MapPin, Maximize2, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, Building2, Check, ChevronDown, Clock, Home, Info, Key, Lightbulb, MapPin, Maximize2, Percent, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Modal, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
@@ -22,9 +38,15 @@ export default function RealEstateScreen() {
     const [headerStats, setHeaderStats] = useState<RealEstateHeaderStats | null>(null);
     const [salesBreakdown, setSalesBreakdown] = useState<RealEstateSalesBreakdown | null>(null);
 
-    // Trend Modal State
+    // State for Trend Modal (Permits)
     const [trendModalVisible, setTrendModalVisible] = useState(false);
     const [trendModalData, setTrendModalData] = useState<TrendDataPoint[]>([]);
+
+    // State for Sales Trend Modal
+    const [salesTrendVisible, setSalesTrendVisible] = useState(false);
+    const [salesTrendData, setSalesTrendData] = useState<any[]>([]);
+    const [salesCity, setSalesCity] = useState('TR');
+    const [salesPeriod, setSalesPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
     // City Filter
     const [cityList, setCityList] = useState<CityItem[]>([]);
@@ -98,7 +120,7 @@ export default function RealEstateScreen() {
         if (newCities.includes(cityCode)) {
             newCities = newCities.filter(c => c !== cityCode);
         } else {
-            if (newCities.length >= 5) {
+            if (newCities.length>= 5) {
                 // Alert or ignore? limit 5
                 return;
             }
@@ -206,12 +228,8 @@ export default function RealEstateScreen() {
 
     const handleOpenTrendAnalysis = async () => {
         try {
-            // Optimistically show modal with loading state?
-            // Or wait for data. Let's wait for data briefly or show modal + loading.
-            // For now, simple fetch then show.
             const { data } = await getHousingPermitTrends(24);
             if (data) {
-                // Map to UI model if needed, but they match closely
                 const mappedData: TrendDataPoint[] = data.map(d => ({
                     period_label: d.period_label,
                     permit_count: d.permit_count,
@@ -224,6 +242,31 @@ export default function RealEstateScreen() {
         } catch (e) {
             console.error(e);
         }
+    };
+
+    const fetchSalesTrend = async (city: string, period: 'monthly' | 'yearly') => {
+        try {
+            const data = await getHousingSalesChartData(city, period);
+            if (data) {
+                // Map to TrendDataPoint format expected by TrendModal
+                const mappedData = data.map(d => ({
+                    period_label: d.display_date,
+                    label: d.display_date, // Generic label
+                    value: d.total_sales,
+                    // No permit_count or avg_m2 here
+                }));
+                setSalesTrendData(mappedData);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleOpenSalesTrend = async () => {
+        setSalesCity('TR');
+        setSalesPeriod('monthly');
+        await fetchSalesTrend('TR', 'monthly');
+        setSalesTrendVisible(true);
     };
 
     return (
@@ -265,7 +308,7 @@ export default function RealEstateScreen() {
                                         <Text className="text-white text-2xl font-bold mb-1">%{headerStats.interest_card.value}</Text>
 
                                         {/* Logic: UP -> RED (Bad) */}
-                                        <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${headerStats.interest_card.direction === 'up' ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+                                        <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${headerStats.interest_card.direction === 'up' ? 'bg-red-500/20' : 'bg-green-500/20'} `}>
                                             {headerStats.interest_card.direction === 'up' ?
                                                 <TrendingUp size={10} color="#ef4444" /> :
                                                 <TrendingDown size={10} color="#22c55e" />
@@ -290,14 +333,16 @@ export default function RealEstateScreen() {
                                 <>
                                     <View className="flex-row justify-between items-start mb-2">
                                         <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">Toplam Satış</Text>
-                                        {/* Placeholder for Expand Icon if needed later */}
+                                        <TouchableOpacity onPress={handleOpenSalesTrend} className="bg-slate-700/50 p-1.5 rounded-lg -mr-1 -mt-1 active:bg-slate-600">
+                                            <Maximize2 size={12} color="#94a3b8" />
+                                        </TouchableOpacity>
                                     </View>
                                     <View>
                                         <Text className="text-slate-500 text-[10px] mb-0.5 font-medium uppercase">{getFormattedDate(headerStats.sales_card.reference_date)}</Text>
                                         <Text className="text-white text-xl font-bold mb-1">{formatNumber(headerStats.sales_card.value)}</Text>
 
                                         {/* Logic: UP -> GREEN (Good) */}
-                                        <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${headerStats.sales_card.direction === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                                        <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${headerStats.sales_card.direction === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'} `}>
                                             {headerStats.sales_card.direction === 'up' ?
                                                 <TrendingUp size={10} color="#22c55e" /> :
                                                 <TrendingDown size={10} color="#ef4444" />
@@ -329,7 +374,7 @@ export default function RealEstateScreen() {
                                         <Text className="text-white text-2xl font-bold mb-1">{headerStats.cost_card.value}</Text>
 
                                         {/* Logic: UP -> RED (Bad) */}
-                                        <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${headerStats.cost_card.direction === 'up' ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+                                        <View className={`flex-row items-center gap-1 self-start px-1.5 py-0.5 rounded ${headerStats.cost_card.direction === 'up' ? 'bg-red-500/20' : 'bg-green-500/20'} `}>
                                             {headerStats.cost_card.direction === 'up' ?
                                                 <TrendingUp size={10} color="#ef4444" /> :
                                                 <TrendingDown size={10} color="#22c55e" />
@@ -377,15 +422,15 @@ export default function RealEstateScreen() {
                                     <View className="flex-row bg-slate-800 rounded-lg p-0.5">
                                         <TouchableOpacity
                                             onPress={() => setSalesCategoryFilter('PAYMENT')}
-                                            className={`px-3 py-1 rounded-md ${salesCategoryFilter === 'PAYMENT' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                            className={`px-3 py-1 rounded-md ${salesCategoryFilter === 'PAYMENT' ? 'bg-blue-600' : 'bg-transparent'} `}
                                         >
-                                            <Text className={`text-xs font-bold ${salesCategoryFilter === 'PAYMENT' ? 'text-white' : 'text-slate-400'}`}>Ödeme Tipi</Text>
+                                            <Text className={`text-xs font-bold ${salesCategoryFilter === 'PAYMENT' ? 'text-white' : 'text-slate-400'} `}>Ödeme Tipi</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             onPress={() => setSalesCategoryFilter('HOUSING')}
-                                            className={`px-3 py-1 rounded-md ${salesCategoryFilter === 'HOUSING' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                            className={`px-3 py-1 rounded-md ${salesCategoryFilter === 'HOUSING' ? 'bg-blue-600' : 'bg-transparent'} `}
                                         >
-                                            <Text className={`text-xs font-bold ${salesCategoryFilter === 'HOUSING' ? 'text-white' : 'text-slate-400'}`}>Konut Tipi</Text>
+                                            <Text className={`text-xs font-bold ${salesCategoryFilter === 'HOUSING' ? 'text-white' : 'text-slate-400'} `}>Konut Tipi</Text>
                                         </TouchableOpacity>
                                     </View>
 
@@ -393,15 +438,15 @@ export default function RealEstateScreen() {
                                     <View className="flex-row bg-slate-800 rounded-lg p-0.5">
                                         <TouchableOpacity
                                             onPress={() => setSalesTimeFilter('MONTH')}
-                                            className={`px-3 py-1 rounded-md ${salesTimeFilter === 'MONTH' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                            className={`px-3 py-1 rounded-md ${salesTimeFilter === 'MONTH' ? 'bg-blue-600' : 'bg-transparent'} `}
                                         >
-                                            <Text className={`text-xs font-bold ${salesTimeFilter === 'MONTH' ? 'text-white' : 'text-slate-400'}`}>Ay</Text>
+                                            <Text className={`text-xs font-bold ${salesTimeFilter === 'MONTH' ? 'text-white' : 'text-slate-400'} `}>Ay</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             onPress={() => setSalesTimeFilter('YEAR')}
-                                            className={`px-3 py-1 rounded-md ${salesTimeFilter === 'YEAR' ? 'bg-blue-600' : 'bg-transparent'}`}
+                                            className={`px-3 py-1 rounded-md ${salesTimeFilter === 'YEAR' ? 'bg-blue-600' : 'bg-transparent'} `}
                                         >
-                                            <Text className={`text-xs font-bold ${salesTimeFilter === 'YEAR' ? 'text-white' : 'text-slate-400'}`}>Yıl</Text>
+                                            <Text className={`text-xs font-bold ${salesTimeFilter === 'YEAR' ? 'text-white' : 'text-slate-400'} `}>Yıl</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -491,12 +536,12 @@ export default function RealEstateScreen() {
                                                                 <Text className="text-slate-400 text-[10px] w-11 text-right" numberOfLines={1}>%{item.share}</Text>
                                                             </View>
                                                             {salesTimeFilter === 'MONTH' && (
-                                                                <View className={`self-end mt-1 flex-row items-center gap-1 px-1.5 py-0.5 rounded ${item.direction === 'up' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                                                                <View className={`self-end mt-1 flex-row items-center gap-1 px-1.5 py-0.5 rounded ${item.direction === 'up' ? 'bg-green-500/10' : 'bg-red-500/10'} `}>
                                                                     {item.direction === 'up' ?
                                                                         <TrendingUp size={8} color="#22c55e" /> :
                                                                         <TrendingDown size={8} color="#ef4444" />
                                                                     }
-                                                                    <Text className={`text-[9px] font-bold ${item.direction === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                                                                    <Text className={`text-[9px] font-bold ${item.direction === 'up' ? 'text-green-500' : 'text-red-500'} `}>
                                                                         %{Math.abs(item.change_rate)}
                                                                     </Text>
                                                                 </View>
@@ -523,7 +568,7 @@ export default function RealEstateScreen() {
                                     >
                                         <Plus size={10} color="#94a3b8" />
                                         <Text className="text-slate-300 text-[10px] font-bold uppercase">
-                                            {trendCities.length > 0 ? `${trendCities.length} Şehir` : 'TOP 5'}
+                                            {trendCities.length> 0 ? `${trendCities.length} Şehir` : 'TOP 5'}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -619,7 +664,7 @@ export default function RealEstateScreen() {
 
                                                         // Determine position based on index to prevent overflow on right side
                                                         const pointIndex = items[0]?.customData?.index ?? 0;
-                                                        const isNearRightEdge = pointIndex >= (totalDataPoints - 4);
+                                                        const isNearRightEdge = pointIndex>= (totalDataPoints - 4);
 
                                                         // Shift left if near right edge: -140px (approx w-32 plus spacing)
                                                         // Normal: ml-4 (16px)
@@ -629,7 +674,7 @@ export default function RealEstateScreen() {
                                                             <View style={{ marginLeft }} className="bg-slate-900/95 border border-white/10 p-3 rounded-xl shadow-lg w-32">
                                                                 {/* Date Header (from first item) */}
                                                                 <Text className="text-slate-400 text-[10px] font-bold mb-2 text-center border-b border-white/5 pb-1">
-                                                                    {items[0]?.label ? `${items[0].label}. AY` : 'Tarih'}
+                                                                    {items[0]?.label ? `${items[0].label}.AY` : 'Tarih'}
                                                                 </Text>
 
                                                                 {/* Iterate over items to show city values */}
@@ -687,7 +732,7 @@ export default function RealEstateScreen() {
                         {[0, 1].map(idx => (
                             <View
                                 key={idx}
-                                className={`h-2 rounded-full transition-all ${activeSlide === idx ? 'w-6 bg-blue-500' : 'w-2 bg-slate-700'}`}
+                                className={`h-2 rounded-full transition-all ${activeSlide === idx ? 'w-6 bg-blue-500' : 'w-2 bg-slate-700'} `}
                             />
                         ))}
                     </View>
@@ -809,7 +854,7 @@ export default function RealEstateScreen() {
                 </View>
 
                 {/* --- Büyük Resim (Macro Cycle) Section --- */}
-                <View className="mb-24">
+                <View className="mb-24" >
                     <View className="flex-row justify-between items-center mb-4">
                         <Text className="text-white text-lg font-bold">Büyük Resim</Text>
                         <View className="flex-row bg-slate-800 rounded-lg p-1 border border-white/10">
@@ -918,7 +963,7 @@ export default function RealEstateScreen() {
                                             const item = items[0];
                                             const totalItems = macroData.length;
                                             // Shift left for the last 11 items to prevent overflow
-                                            const isRightSide = item.index >= totalItems - 11;
+                                            const isRightSide = item.index>= totalItems - 11;
 
                                             return (
                                                 <View style={{
@@ -1004,8 +1049,8 @@ export default function RealEstateScreen() {
                                     return (
                                         <TouchableOpacity
                                             onPress={() => toggleTrendCity(item.city_code)}
-                                            disabled={!isSelected && trendCities.length >= 5}
-                                            className={`flex-row items-center justify-between p-4 rounded-xl mb-3 border ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/5'} ${(!isSelected && trendCities.length >= 5) ? 'opacity-50' : ''}`}
+                                            disabled={!isSelected && trendCities.length>= 5}
+                                            className={`flex-row items-center justify-between p-4 rounded-xl mb-3 border ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/5'} ${(!isSelected && trendCities.length>= 5) ? 'opacity-50' : ''}`}
                                         >
                                             <View className="flex-row items-center gap-3">
                                                 <Text className={`text-base font-bold ${isSelected ? 'text-white' : 'text-slate-300'}`}>
@@ -1104,29 +1149,61 @@ export default function RealEstateScreen() {
                     </TouchableOpacity>
                 </TouchableOpacity>
             </Modal>
+            {/* Trend Analysis Modal (Permits) */}
+            {
+                trendModalVisible && (
+                    <TrendModal
+                        visible={true}
+                        onClose={() => setTrendModalVisible(false)}
+                        title="Yeni Konut İzni Trendi"
+                        data={trendModalData}
+                        isPremium={isPremium}
+                        isAuthenticated={!!session}
+                        onLogin={() => {
+                            setTrendModalVisible(false);
+                            router.push('/login-modal');
+                        }}
+                        onUpgrade={() => {
+                            // Navigate to paywall or handle upgrade
+                            console.log('Upgrade clicked');
+                            setTrendModalVisible(false);
+                        }}
+                    />
+                )
+            }
 
-            {/* Trend Analysis Modal */}
-            {trendModalVisible && (
-                <TrendModal
-                    visible={true}
-                    onClose={() => setTrendModalVisible(false)}
-                    title="Yeni Konut İzni Trendi"
-                    data={trendModalData}
-                    isPremium={isPremium}
-                    isAuthenticated={!!session}
-                    onLogin={() => {
-                        setTrendModalVisible(false);
-                        router.push('/login-modal');
-                    }}
-                    onUpgrade={() => {
-                        // Navigate to paywall or handle upgrade
-                        console.log('Upgrade clicked');
-                        setTrendModalVisible(false);
-                    }}
-                />
-            )}
-
-        </SafeAreaView >
+            {/* Sales Trend Analysis Modal */}
+            {
+                salesTrendVisible && (
+                    <TrendModal
+                        visible={true}
+                        onClose={() => setSalesTrendVisible(false)}
+                        title="Satış Trendi Analizi"
+                        data={salesTrendData}
+                        isPremium={isPremium}
+                        isAuthenticated={!!session}
+                        filterType="AGGREGATION"
+                        showCityFilter={true}
+                        selectedCity={salesCity}
+                        onCityChange={(city) => {
+                            setSalesCity(city);
+                            fetchSalesTrend(city, salesPeriod);
+                        }}
+                        selectedPeriod={salesPeriod}
+                        onPeriodChange={(period) => {
+                            setSalesPeriod(period);
+                            fetchSalesTrend(salesCity, period);
+                        }}
+                        onLogin={() => {
+                            setSalesTrendVisible(false);
+                            router.push('/login-modal');
+                        }}
+                        onUpgrade={() => {
+                            setSalesTrendVisible(false);
+                        }}
+                    />
+                )
+            } </SafeAreaView>
     );
 }
 
