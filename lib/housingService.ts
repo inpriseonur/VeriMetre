@@ -517,3 +517,21 @@ export const getHousingSalesChartData = async (cityCode: string = 'TR', period: 
         return [];
     }
 };
+export interface InterestChartDataPoint {
+    rate: number;
+    display_date: string;
+}
+
+export const getHousingInterestChartData = async (): Promise<InterestChartDataPoint[] | null> => {
+    try {
+        const { data, error } = await supabase.rpc('get_housing_interest_chart_data');
+        if (error) {
+            console.error('getHousingInterestChartData RPC Error:', error);
+            return null;
+        }
+        return data as InterestChartDataPoint[];
+    } catch (e) {
+        console.error('Error in getHousingInterestChartData:', e);
+        return null;
+    }
+};

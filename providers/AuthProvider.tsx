@@ -61,7 +61,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 .single();
 
             if (data) {
+                console.log("Profile data fetched:", data);
                 setIsPremium(data.is_premium || false);
+            } else {
+                console.log("No profile data found for user:", userId);
             }
         } catch (err) {
             console.error('Error fetching profile:', err);
@@ -70,13 +73,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         // 1. Check existing session
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
             setSession(session);
             const currentUser = session ? session.user : null;
             setUser(currentUser);
 
             if (currentUser) {
-                fetchProfile(currentUser.id);
+                await fetchProfile(currentUser.id);
             }
 
             setIsLoading(false);
@@ -84,14 +87,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         // 2. Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            console.log("Auth State Changed:", _event);
+            console.log("Auth State Changed:", _event, session?.user?.email);
             setSession(session);
             const currentUser = session ? session.user : null;
             setUser(currentUser);
 
             if (session) {
                 setIsGuest(false);
-                if (currentUser) fetchProfile(currentUser.id);
+                if (currentUser) {
+                    console.log("Fetching profile for:", currentUser.id);
+                    await fetchProfile(currentUser.id);
+                }
             } else {
                 setIsPremium(false);
             }

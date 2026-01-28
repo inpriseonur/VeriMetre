@@ -4,21 +4,20 @@ import {
     CityTrendData,
     getActiveCities,
     getCitySalesTrend,
+    getHousingInterestChartData,
     getHousingPermitTrends,
     getHousingSalesChartData,
-    getHousingSummary,
     getRealEstateHeader,
     getRealEstateMacroHistory,
     getRealEstateSupplyStats,
     getSalesBreakdown,
     RealEstateHeaderStats,
-    RealEstateMacroData,
     RealEstateSalesBreakdown,
     RealEstateSupplyStats
 } from '@/lib/housingService';
 import { useAuth } from '@/providers/AuthProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ArrowDown, ArrowUp, Building2, Check, ChevronDown, Clock, Home, Info, Key, Lightbulb, MapPin, Maximize2, Percent, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
+import { Check, Home, Info, Key, Lightbulb, MapPin, Maximize2, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Modal, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
@@ -47,6 +46,10 @@ export default function RealEstateScreen() {
     const [salesTrendData, setSalesTrendData] = useState<any[]>([]);
     const [salesCity, setSalesCity] = useState('TR');
     const [salesPeriod, setSalesPeriod] = useState<'monthly' | 'yearly'>('monthly');
+
+    // State for Loan Trend Modal
+    const [loanTrendVisible, setLoanTrendVisible] = useState(false);
+    const [loanTrendData, setLoanTrendData] = useState<TrendDataPoint[]>([]);
 
     // City Filter
     const [cityList, setCityList] = useState<CityItem[]>([]);
@@ -120,7 +123,7 @@ export default function RealEstateScreen() {
         if (newCities.includes(cityCode)) {
             newCities = newCities.filter(c => c !== cityCode);
         } else {
-            if (newCities.length>= 5) {
+            if (newCities.length >= 5) {
                 // Alert or ignore? limit 5
                 return;
             }
@@ -231,10 +234,12 @@ export default function RealEstateScreen() {
             const { data } = await getHousingPermitTrends(24);
             if (data) {
                 const mappedData: TrendDataPoint[] = data.map(d => ({
-                    period_label: d.period_label,
+                    label: d.period_label,
+                    value: d.permit_count,
+                    subValue: d.avg_m2,
+                    date: d.year_month,
                     permit_count: d.permit_count,
-                    avg_m2: d.avg_m2,
-                    year_month: d.year_month
+                    avg_m2: d.avg_m2
                 }));
                 setTrendModalData(mappedData);
                 setTrendModalVisible(true);
@@ -249,10 +254,10 @@ export default function RealEstateScreen() {
             const data = await getHousingSalesChartData(city, period);
             if (data) {
                 // Map to TrendDataPoint format expected by TrendModal
-                const mappedData = data.map(d => ({
-                    period_label: d.display_date,
+                const mappedData: TrendDataPoint[] = data.map(d => ({
                     label: d.display_date, // Generic label
                     value: d.total_sales,
+                    date: d.display_date
                     // No permit_count or avg_m2 here
                 }));
                 setSalesTrendData(mappedData);
@@ -267,6 +272,51 @@ export default function RealEstateScreen() {
         setSalesPeriod('monthly');
         await fetchSalesTrend('TR', 'monthly');
         setSalesTrendVisible(true);
+    };
+
+    const handleOpenLoanTrend = async () => {
+        try {
+            const data = await getHousingInterestChartData();
+            if (data) {
+                // Data comes as Oldest First (Ascending) from RPC (e.g. 2014 -> 2025)
+                // TrendModal expects Newest First (Descending) input to work with its slice(0,N).reverse() logic.
+
+                // 1. Reverse to make it Newest First (Descending)
+                const descData = data.slice().reverse();
+
+                // 2. Map and Localize
+                const monthMap: { [key: string]: string } = {
+                    'Jan': 'Oca', 'Feb': 'Şub', 'Mar': 'Mar', 'Apr': 'Nis', 'May': 'May', 'Jun': 'Haz',
+                    'Jul': 'Tem', 'Aug': 'Ağu', 'Sep': 'Eyl', 'Oct': 'Eki', 'Nov': 'Kas', 'Dec': 'Ara'
+                };
+
+                const mappedData: TrendDataPoint[] = descData.map(d => {
+                    // d.display_date expected format: "Jan 25" or similar
+                    let trDate = d.display_date;
+                    const parts = d.display_date.split(' ');
+                    if (parts.length === 2) {
+                        const enMonth = parts[0];
+                        const year = parts[1];
+                        if (monthMap[enMonth]) {
+                            trDate = `${monthMap[enMonth]} ${year}`;
+                        }
+                    }
+
+                    return {
+                        label: trDate,
+                        value: d.rate,
+                        date: trDate,
+                    };
+                });
+
+                // 3. Pass ALL data (Descending) to TrendModal
+                // TrendModal will slice appropriate range (1Y, 3Y, All) and reverse back for chart.
+                setLoanTrendData(mappedData);
+                setLoanTrendVisible(true);
+            }
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     return (
@@ -301,7 +351,9 @@ export default function RealEstateScreen() {
                                 <>
                                     <View className="flex-row justify-between items-start mb-2">
                                         <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">Konut Kredisi</Text>
-                                        {/* Placeholder for Expand Icon if needed later */}
+                                        <TouchableOpacity onPress={handleOpenLoanTrend} className="bg-slate-700/50 p-1.5 rounded-lg -mr-1 -mt-1 active:bg-slate-600">
+                                            <Maximize2 size={12} color="#94a3b8" />
+                                        </TouchableOpacity>
                                     </View>
                                     <View>
                                         <Text className="text-slate-500 text-[10px] mb-0.5 font-medium uppercase">{getFormattedDate(headerStats.interest_card.reference_date)}</Text>
@@ -568,7 +620,7 @@ export default function RealEstateScreen() {
                                     >
                                         <Plus size={10} color="#94a3b8" />
                                         <Text className="text-slate-300 text-[10px] font-bold uppercase">
-                                            {trendCities.length> 0 ? `${trendCities.length} Şehir` : 'TOP 5'}
+                                            {trendCities.length > 0 ? `${trendCities.length} Şehir` : 'TOP 5'}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -664,7 +716,7 @@ export default function RealEstateScreen() {
 
                                                         // Determine position based on index to prevent overflow on right side
                                                         const pointIndex = items[0]?.customData?.index ?? 0;
-                                                        const isNearRightEdge = pointIndex>= (totalDataPoints - 4);
+                                                        const isNearRightEdge = pointIndex >= (totalDataPoints - 4);
 
                                                         // Shift left if near right edge: -140px (approx w-32 plus spacing)
                                                         // Normal: ml-4 (16px)
@@ -963,7 +1015,7 @@ export default function RealEstateScreen() {
                                             const item = items[0];
                                             const totalItems = macroData.length;
                                             // Shift left for the last 11 items to prevent overflow
-                                            const isRightSide = item.index>= totalItems - 11;
+                                            const isRightSide = item.index >= totalItems - 11;
 
                                             return (
                                                 <View style={{
@@ -1049,8 +1101,8 @@ export default function RealEstateScreen() {
                                     return (
                                         <TouchableOpacity
                                             onPress={() => toggleTrendCity(item.city_code)}
-                                            disabled={!isSelected && trendCities.length>= 5}
-                                            className={`flex-row items-center justify-between p-4 rounded-xl mb-3 border ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/5'} ${(!isSelected && trendCities.length>= 5) ? 'opacity-50' : ''}`}
+                                            disabled={!isSelected && trendCities.length >= 5}
+                                            className={`flex-row items-center justify-between p-4 rounded-xl mb-3 border ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/5'} ${(!isSelected && trendCities.length >= 5) ? 'opacity-50' : ''}`}
                                         >
                                             <View className="flex-row items-center gap-3">
                                                 <Text className={`text-base font-bold ${isSelected ? 'text-white' : 'text-slate-300'}`}>
@@ -1203,7 +1255,28 @@ export default function RealEstateScreen() {
                         }}
                     />
                 )
-            } </SafeAreaView>
+            }
+            {/* 3. Loan Trend Logic */}
+            {
+                loanTrendVisible && (
+                    <TrendModal
+                        visible={true}
+                        onClose={() => setLoanTrendVisible(false)}
+                        title="Konut Kredisi Trendi"
+                        data={loanTrendData}
+                        isPremium={isPremium}
+                        isAuthenticated={!!session}
+                        hideFilters={true} // Simplified Mode
+                        onLogin={() => {
+                            setLoanTrendVisible(false);
+                            router.push('/login-modal');
+                        }}
+                        onUpgrade={() => {
+                            setLoanTrendVisible(false);
+                        }}
+                    />
+                )
+            }</SafeAreaView>
     );
 }
 
