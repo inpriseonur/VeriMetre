@@ -115,7 +115,7 @@ export default function DashboardScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
       <ScrollView
-        className="flex-1 px-5 pt-4"
+        className="flex-1 px-5 pt-1"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
         }

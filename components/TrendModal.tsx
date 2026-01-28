@@ -209,6 +209,7 @@ export default function TrendModal({
             presentationStyle="fullScreen"
             statusBarTranslucent={true}
             onRequestClose={onClose}
+            supportedOrientations={['portrait', 'landscape']}
         >
             <StatusBar style="light" hidden={true} translucent />
             <View className="flex-1 bg-[#0B1121] px-5 pt-6 justify-between pb-6">
@@ -272,6 +273,7 @@ export default function TrendModal({
                                             animationType="fade"
                                             transparent={true}
                                             onRequestClose={() => setCitySelectorVisible(false)}
+                                            supportedOrientations={['landscape', 'portrait']}
                                         >
                                             <TouchableOpacity
                                                 activeOpacity={1}

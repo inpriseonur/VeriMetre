@@ -541,7 +541,7 @@ export default function RealEstateScreen() {
                                                         donut
                                                         radius={70}
                                                         innerRadius={50}
-                                                        innerCircleColor="#151C2F"
+                                                        innerCircleColor="#151C2F" // Slate-800 to match card bg approximation
                                                         centerLabelComponent={() => (
                                                             <View className="items-center justify-center w-24">
                                                                 <Text className="text-slate-500 text-[10px] font-bold uppercase text-center">VERİ DÖNEMİ</Text>
