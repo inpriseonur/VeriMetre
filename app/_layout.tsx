@@ -32,6 +32,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
+        <PushNotificationHandler />
         <ThemeProvider value={DarkTheme}>
           <Stack>
             <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -45,4 +46,12 @@ export default function RootLayout() {
       </AuthProvider>
     </GestureHandlerRootView>
   );
+}
+
+// Helper component to use hook inside AuthProvider
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+
+function PushNotificationHandler() {
+  usePushNotifications();
+  return null;
 }

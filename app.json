@@ -52,7 +52,8 @@
       ],
       "@react-native-google-signin/google-signin",
       "expo-secure-store",
-      "expo-screen-orientation"
+      "expo-screen-orientation",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
