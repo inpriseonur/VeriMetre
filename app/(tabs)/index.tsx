@@ -1,3 +1,4 @@
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import InflationChart from '@/components/InflationChart';
 import { AutoSummary, getAutoSummary } from '@/lib/autoService';
 import { getHousingSummary, HousingSummary } from '@/lib/housingService';
@@ -119,13 +120,10 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
         }
       >
-        {/* --- Header removed, moved to Native Header --- */}
+        {/* --- Announcement Banner --- */}
+        <AnnouncementBanner />
 
-        {/* --- Market Summary Only Header --- */}
-        <View className="flex-row justify-between items-center mb-3">
-          <Text className="text-white text-lg font-bold">Piyasa Özeti</Text>
-          <Text className="text-blue-500 text-sm font-medium">Tümü</Text>
-        </View>
+        {/* --- Summary Cards (Horizontal Scroll) --- */}
 
         {/* --- Summary Cards (Horizontal Scroll) --- */}
         <View className="mb-8">
@@ -224,12 +222,12 @@ export default function DashboardScreen() {
         </View>
 
         {/* Row of 2 Small Cards */}
-        <View className="flex-row gap-4 mb-8">
+        <View className="flex-row justify-between mb-8">
           {/* Housing Sales */}
-          <View className="flex-1 bg-[#151C2F] rounded-3xl p-4 border border-slate-800/50">
-            <View className="flex-row justify-between items-start mb-3">
-              <View className="bg-purple-500/20 w-10 h-10 rounded-xl items-center justify-center">
-                <Building2 size={20} color="#a855f7" />
+          <View className="w-[48%] bg-[#151C2F] rounded-3xl p-3 border border-slate-800/50 justify-between">
+            <View className="flex-row justify-between items-start mb-2">
+              <View className="bg-purple-500/20 w-8 h-8 rounded-lg items-center justify-center">
+                <Building2 size={18} color="#a855f7" />
               </View>
               {housingSummary && (
                 <Text className="text-slate-500 text-[10px] font-medium mt-1">
@@ -237,7 +235,7 @@ export default function DashboardScreen() {
                 </Text>
               )}
             </View>
-            <Text className="text-slate-400 text-sm mb-1">Konut Satış</Text>
+            <Text className="text-slate-400 text-xs mb-1 font-medium">Konut Satış</Text>
 
             {!housingSummary ? (
               // Skeleton
@@ -246,18 +244,18 @@ export default function DashboardScreen() {
                 <View className="h-4 w-16 bg-slate-800 rounded-md animate-pulse" />
               </View>
             ) : (
-              <View className="flex-row items-center gap-2">
-                <Text className="text-white text-2xl font-bold">
+              <View className="flex-row items-center gap-1.5 flex-wrap">
+                <Text className="text-white text-xl font-bold tracking-tighter">
                   {housingSummary.total_sales.toLocaleString('tr-TR')}
                 </Text>
-                <View className={`px-2 py-0.5 rounded-full ${housingSummary.direction === 'up' ? 'bg-green-500/20' : housingSummary.direction === 'down' ? 'bg-red-500/20' : 'bg-slate-700/20'}`}>
-                  <View className="flex-row items-center gap-1">
+                <View className={`px-1.5 py-0.5 rounded-full ${housingSummary.direction === 'up' ? 'bg-green-500/20' : housingSummary.direction === 'down' ? 'bg-red-500/20' : 'bg-slate-700/20'}`}>
+                  <View className="flex-row items-center gap-0.5">
                     {housingSummary.direction === 'up' ? (
                       <TrendingUp size={10} color="#22c55e" />
                     ) : housingSummary.direction === 'down' ? (
                       <TrendingDown size={10} color="#ef4444" />
                     ) : null}
-                    <Text className={`${housingSummary.direction === 'up' ? 'text-green-500' : housingSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-xs font-bold`}>
+                    <Text className={`${housingSummary.direction === 'up' ? 'text-green-500' : housingSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-[10px] font-bold`}>
                       %{housingSummary.percent_change}
                     </Text>
                   </View>
@@ -267,10 +265,10 @@ export default function DashboardScreen() {
           </View>
 
           {/* Auto Sales */}
-          <View className="flex-1 bg-[#151C2F] rounded-3xl p-4 border border-slate-800/50">
-            <View className="flex-row justify-between items-start mb-3">
-              <View className="bg-sky-500/20 w-10 h-10 rounded-xl items-center justify-center">
-                <Car size={20} color="#0ea5e9" />
+          <View className="w-[48%] bg-[#151C2F] rounded-3xl p-3 border border-slate-800/50 justify-between">
+            <View className="flex-row justify-between items-start mb-2">
+              <View className="bg-sky-500/20 w-8 h-8 rounded-lg items-center justify-center">
+                <Car size={18} color="#0ea5e9" />
               </View>
               {autoSummary && (
                 <Text className="text-slate-500 text-[10px] font-medium mt-1">
@@ -278,7 +276,7 @@ export default function DashboardScreen() {
                 </Text>
               )}
             </View>
-            <Text className="text-slate-400 text-sm mb-1">Otomobil Satış</Text>
+            <Text className="text-slate-400 text-xs mb-1 font-medium">Otomobil Satış</Text>
 
             {!autoSummary ? (
               // Skeleton
@@ -287,18 +285,18 @@ export default function DashboardScreen() {
                 <View className="h-4 w-16 bg-slate-800 rounded-md animate-pulse" />
               </View>
             ) : (
-              <View className="flex-row items-center gap-2">
-                <Text className="text-white text-2xl font-bold">
+              <View className="flex-row items-center gap-1.5 flex-wrap">
+                <Text className="text-white text-xl font-bold tracking-tighter">
                   {autoSummary.total_sales.toLocaleString('tr-TR')}
                 </Text>
-                <View className={`px-2 py-0.5 rounded-full ${autoSummary.direction === 'up' ? 'bg-green-500/20' : autoSummary.direction === 'down' ? 'bg-red-500/20' : 'bg-slate-700/20'}`}>
-                  <View className="flex-row items-center gap-1">
+                <View className={`px-1.5 py-0.5 rounded-full ${autoSummary.direction === 'up' ? 'bg-green-500/20' : autoSummary.direction === 'down' ? 'bg-red-500/20' : 'bg-slate-700/20'}`}>
+                  <View className="flex-row items-center gap-0.5">
                     {autoSummary.direction === 'up' ? (
                       <TrendingUp size={10} color="#22c55e" />
                     ) : autoSummary.direction === 'down' ? (
                       <TrendingDown size={10} color="#ef4444" />
                     ) : null}
-                    <Text className={`${autoSummary.direction === 'up' ? 'text-green-500' : autoSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-xs font-bold`}>
+                    <Text className={`${autoSummary.direction === 'up' ? 'text-green-500' : autoSummary.direction === 'down' ? 'text-red-500' : 'text-slate-400'} text-[10px] font-bold`}>
                       %{autoSummary.percent_change}
                     </Text>
                   </View>

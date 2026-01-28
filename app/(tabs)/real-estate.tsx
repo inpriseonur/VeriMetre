@@ -1,6 +1,8 @@
-import { CityItem, CityTrendData, RealEstateHeaderStats, RealEstateSalesBreakdown, RealEstateSupplyStats, getActiveCities, getCitySalesTrend, getRealEstateHeader, getRealEstateMacroHistory, getRealEstateSupplyStats, getSalesBreakdown } from '@/lib/housingService';
+import { TrendDataPoint } from '@/components/TrendModal';
+import { CityItem, CityTrendData, getActiveCities, getCitySalesTrend, getHousingPermitTrends, getRealEstateHeader, getRealEstateMacroHistory, getRealEstateSupplyStats, getSalesBreakdown, RealEstateHeaderStats, RealEstateSalesBreakdown, RealEstateSupplyStats } from '@/lib/housingService';
+import { useAuth } from '@/providers/AuthProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Check, Home, Info, Key, Lightbulb, MapPin, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
+import { Check, Home, Info, Key, Lightbulb, MapPin, Maximize2, Plus, TrendingDown, TrendingUp, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Modal, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
@@ -10,11 +12,16 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CAROUSEL_WIDTH = SCREEN_WIDTH - 40; // px-5 = 20px padding each side
 
 export default function RealEstateScreen() {
+    const { isPremium } = useAuth();
     const [isGlobalLoading, setGlobalLoading] = useState(true); // Initial load
     const [isSalesLoading, setSalesLoading] = useState(false); // For sales section updates
     const [refreshing, setRefreshing] = useState(false);
     const [headerStats, setHeaderStats] = useState<RealEstateHeaderStats | null>(null);
     const [salesBreakdown, setSalesBreakdown] = useState<RealEstateSalesBreakdown | null>(null);
+
+    // Trend Modal State
+    const [trendModalVisible, setTrendModalVisible] = useState(false);
+    const [trendModalData, setTrendModalData] = useState<TrendDataPoint[]>([]);
 
     // City Filter
     const [cityList, setCityList] = useState<CityItem[]>([]);
@@ -194,8 +201,27 @@ export default function RealEstateScreen() {
         return d.toLocaleString('tr-TR', { month: 'long' });
     };
 
-    const now = new Date();
-    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const handleOpenTrendAnalysis = async () => {
+        try {
+            // Optimistically show modal with loading state?
+            // Or wait for data. Let's wait for data briefly or show modal + loading.
+            // For now, simple fetch then show.
+            const { data } = await getHousingPermitTrends(24);
+            if (data) {
+                // Map to UI model if needed, but they match closely
+                const mappedData: TrendDataPoint[] = data.map(d => ({
+                    period_label: d.period_label,
+                    permit_count: d.permit_count,
+                    avg_m2: d.avg_m2,
+                    year_month: d.year_month
+                }));
+                setTrendModalData(mappedData);
+                setTrendModalVisible(true);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     return (
         <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
@@ -211,7 +237,7 @@ export default function RealEstateScreen() {
 
                 {/* --- Piyasa Ateşi (Header Stats) --- */}
                 <View className="mb-8">
-                    <Text className="text-white text-lg font-bold mb-3">Piyasa Ateşi</Text>
+                    {/* Sub-header removed */}
 
                     <ScrollView
                         horizontal
@@ -330,7 +356,7 @@ export default function RealEstateScreen() {
                             {/* Header + Controls */}
                             <View className="flex-col gap-3 mb-6">
                                 <View className="flex-row items-center gap-2">
-                                    <Text className="text-white text-lg font-bold">Satışın Kimyası</Text>
+                                    <Text className="text-white text-lg font-bold">Satış Adetleri</Text>
                                     <TouchableOpacity
                                         onPress={() => setCityModalVisible(true)}
                                         className="bg-slate-800 px-2 py-1 rounded-md flex-row items-center gap-1 border border-slate-700"
@@ -661,10 +687,10 @@ export default function RealEstateScreen() {
                     </View>
                 </View>
 
-                {/* --- Arz ve Gelecek Section --- */}
-                <View className="mb-10">
-                    <Text className="text-white text-lg font-bold mb-3">Arz ve Gelecek</Text>
 
+
+                {/* --- Arz ve Gelecek Section (Header Removed) --- */}
+                <View className="mb-10">
                     <View className="flex-col gap-4">
                         {/* 1. İlan Havuzu (Satılık/Kiralık) */}
                         <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4">
@@ -688,26 +714,26 @@ export default function RealEstateScreen() {
                                         </Text>
                                     </View>
 
-                                    <View className="flex-col gap-4">
+                                    <View className="flex-row gap-2">
                                         {/* Satılık */}
-                                        <View className="flex-row items-center gap-4 bg-slate-900/30 p-3 rounded-xl border border-white/5">
+                                        <View className="flex-1 flex-row items-center gap-3 bg-slate-900/30 p-2 rounded-xl border border-white/5">
                                             <View className="bg-orange-500/20 p-2 rounded-lg">
-                                                <Home size={20} color="#f97316" />
+                                                <Home size={18} color="#f97316" />
                                             </View>
                                             <View>
-                                                <Text className="text-white text-xl font-bold">{formatNumber(supplyStats.listings.for_sale)}</Text>
-                                                <Text className="text-slate-400 text-xs font-medium">Satılık Konut</Text>
+                                                <Text className="text-white text-lg font-bold">{formatNumber(supplyStats.listings.for_sale)}</Text>
+                                                <Text className="text-slate-400 text-[10px] font-medium">Satılık Konut</Text>
                                             </View>
                                         </View>
 
                                         {/* Kiralık */}
-                                        <View className="flex-row items-center gap-4 bg-slate-900/30 p-3 rounded-xl border border-white/5">
+                                        <View className="flex-1 flex-row items-center gap-3 bg-slate-900/30 p-2 rounded-xl border border-white/5">
                                             <View className="bg-blue-500/20 p-2 rounded-lg">
-                                                <Key size={20} color="#3b82f6" />
+                                                <Key size={18} color="#3b82f6" />
                                             </View>
                                             <View>
-                                                <Text className="text-white text-xl font-bold">{formatNumber(supplyStats.listings.for_rent)}</Text>
-                                                <Text className="text-slate-400 text-xs font-medium">Kiralık Konut</Text>
+                                                <Text className="text-white text-lg font-bold">{formatNumber(supplyStats.listings.for_rent)}</Text>
+                                                <Text className="text-slate-400 text-[10px] font-medium">Kiralık Konut</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -725,7 +751,15 @@ export default function RealEstateScreen() {
                             ) : (
                                 <>
                                     <View className="flex-row justify-between items-start mb-2">
-                                        <Text className="text-white font-bold text-base">Gelecek Arzı</Text>
+                                        <View className="flex-row items-center gap-2">
+                                            <Text className="text-white font-bold text-base">Yeni Konut İzni</Text>
+                                            <TouchableOpacity
+                                                onPress={handleOpenTrendAnalysis}
+                                                className="bg-blue-600/20 p-1.5 rounded-md"
+                                            >
+                                                <Maximize2 size={12} color="#60a5fa" />
+                                            </TouchableOpacity>
+                                        </View>
                                         <Text className="text-slate-500 text-[10px]">
                                             {(() => {
                                                 if (!supplyStats.permits.reference_date) return '';
@@ -743,7 +777,6 @@ export default function RealEstateScreen() {
                                             <Text className="text-white text-4xl font-extrabold tracking-tight">
                                                 {formatNumber(supplyStats.permits.total_units)}
                                             </Text>
-                                            <Text className="text-slate-400 text-sm font-medium mt-1 mb-2">Yeni Konut İzni</Text>
 
                                             {/* Trend */}
                                             <View className={`flex-row items-center gap-1 self-start px-2 py-1 rounded-md ${supplyStats.permits.direction === 'up' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
@@ -860,9 +893,7 @@ export default function RealEstateScreen() {
                                         maxValue: 60,
                                         stepValue: 12,
                                         noOfSections: 5,
-                                        labelColor: '#F97316',
-                                        yAxisTextStyle: { color: '#F97316', fontSize: 10 },
-                                        labelText: '%'
+                                        yAxisTextStyle: { color: '#F97316', fontSize: 10 }
                                     }}
 
                                     // Pointer Interaction (Tooltip)
@@ -991,6 +1022,7 @@ export default function RealEstateScreen() {
 
             </ScrollView>
 
+
             {/* City Selection Modal */}
             <Modal
                 visible={isCityModalVisible}
@@ -999,9 +1031,8 @@ export default function RealEstateScreen() {
                 onRequestClose={() => setCityModalVisible(false)}
             >
                 <View className="flex-1 bg-black/80 justify-center items-center px-5">
-                    <View className="bg-[#1e293b] w-full max-h-[70%] rounded-2xl border border-white/10 overflow-hidden">
-
-                        {/* Modal Header */}
+                    <View className="bg-[#1e293b] w-full max-h-[80%] rounded-2xl border border-white/10 overflow-hidden">
+                        {/* Header */}
                         <View className="flex-row justify-between items-center p-4 border-b border-white/5 bg-slate-800">
                             <Text className="text-white text-lg font-bold">Şehir Seçin</Text>
                             <TouchableOpacity onPress={() => setCityModalVisible(false)} className="bg-slate-700 p-1.5 rounded-full">
@@ -1009,32 +1040,23 @@ export default function RealEstateScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* City List */}
+                        {/* List */}
                         <FlatList
                             data={cityList}
                             keyExtractor={(item) => item.city_code}
-                            contentContainerStyle={{ padding: 16 }}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     onPress={() => {
                                         setSelectedCity(item);
                                         setCityModalVisible(false);
                                     }}
-                                    className={`flex-row items-center justify-between p-4 rounded-xl mb-3 border ${selectedCity.city_code === item.city_code ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/5'}`}
+                                    className={`flex-row items-center justify-between p-4 border-b border-white/5 ${selectedCity.city_code === item.city_code ? 'bg-blue-600/10' : ''}`}
                                 >
-                                    <View className="flex-row items-center gap-3">
-                                        <View className={`w-8 h-8 rounded-full items-center justify-center ${selectedCity.city_code === item.city_code ? 'bg-white/20' : 'bg-slate-700'}`}>
-                                            <MapPin size={14} color="white" />
-                                        </View>
-                                        <Text className={`text-base font-bold ${selectedCity.city_code === item.city_code ? 'text-white' : 'text-slate-300'}`}>
-                                            {item.city_name}
-                                        </Text>
-                                    </View>
-
+                                    <Text className={`text-base font-medium ${selectedCity.city_code === item.city_code ? 'text-blue-400' : 'text-slate-300'}`}>
+                                        {item.city_name}
+                                    </Text>
                                     {selectedCity.city_code === item.city_code && (
-                                        <View className="bg-white/20 px-2 py-0.5 rounded text-white">
-                                            <Text className="text-white text-[10px] font-bold">SEÇİLİ</Text>
-                                        </View>
+                                        <Check size={18} color="#60a5fa" />
                                     )}
                                 </TouchableOpacity>
                             )}

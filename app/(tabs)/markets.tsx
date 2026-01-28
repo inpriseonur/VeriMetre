@@ -1,11 +1,15 @@
 import { LivingStandardsChart } from '@/components/LivingStandardsChart';
-import { EconomicIndicators, fetchMarketData, getEconomicIndicators, getLivingStandardsHistory, MarketItem } from '@/lib/marketService';
+import { SalaryInputModal } from '@/components/SalaryInputModal';
+import { EconomicIndicators, fetchMarketData, getEconomicIndicators, getLastSalaryEntry, getLivingStandardsHistory, getUserPurchasingPower, MarketItem, upsertUserSalary } from '@/lib/marketService';
+import { useAuth } from '@/providers/AuthProvider';
 import { ViewLivingStandards } from '@/types/database';
-import { useFocusEffect } from 'expo-router';
-import { ArrowLeftRight, Banknote, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingUp } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { ArrowLeftRight, Banknote, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Dimensions,
     Keyboard,
     KeyboardAvoidingView,
@@ -18,28 +22,77 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+import HeaderProfileButton from '@/components/HeaderProfileButton';
+
+// Available currencies for converter
+const CURRENCIES = [
+    { id: 'USD', name: 'Dolar', symbol: '$', icon: DollarSign },
+    { id: 'EUR', name: 'Euro', symbol: '€', icon: Euro },
+    { id: 'GBP', name: 'Sterlin', symbol: '£', icon: Banknote },
+    { id: 'GA', name: 'Gram Altın', symbol: 'g', icon: Coins },
+];
+
+type ChartMode = 'MIN_WAGE' | 'USER_SALARY';
+
 export default function MarketsScreen() {
+    const { user, isGuest, isPremium } = useAuth();
+    const router = useRouter();
+    const navigation = useNavigation();
     const [marketData, setMarketData] = useState<MarketItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [bottomPadding, setBottomPadding] = useState(40);
 
-    // Economic Indicators State (Decoupled)
+    // Explicitly reset Header Right to remove any stale formatting (e.g. calculator icon)
+    React.useLayoutEffect(() => {
+        navigation.setOptions({
+            headerRight: () => <HeaderProfileButton />,
+        });
+    }, [navigation]);
+
+    // Economic Indicators State
     const [indicators, setIndicators] = useState<EconomicIndicators | null>(null);
     const [chartHistory, setChartHistory] = useState<ViewLivingStandards[]>([]);
-    const [inflationSource, setInflationSource] = useState<'TÜİK' | 'ENAG' | 'İTO'>('TÜİK');
+    const [inflationSource, setInflationSource] = useState<'TÜİK' | 'ENAG' | 'İTO' | 'ORTALAMA'>('TÜİK');
+
+    // User Purchasing Power State
+    const [userPurchasingPower, setUserPurchasingPower] = useState<any[]>([]);
+    const [lastSalaryRecord, setLastSalaryRecord] = useState<{ amount: number, valid_from: string } | null>(null);
+    const [chartMode, setChartMode] = useState<ChartMode>('MIN_WAGE');
+    const [isSalaryModalVisible, setSalaryModalVisible] = useState(false);
+    const [pendingSalaryData, setPendingSalaryData] = useState<{ amount: number, validFrom: string } | null>(null);
 
     // Converter State
     const [amount, setAmount] = useState('1');
     const [selectedCurrencyId, setSelectedCurrencyId] = useState<number | null>(null);
+    const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+    const insets = useSafeAreaInsets();
 
-    // Header Time logic
-    const now = new Date();
-    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener(
+            'keyboardDidShow',
+            () => {
+                setKeyboardVisible(true);
+                setBottomPadding(100); // Add extra padding when keyboard is open
+            }
+        );
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => {
+                setKeyboardVisible(false);
+                setBottomPadding(40); // Reset padding
+            }
+        );
+
+        return () => {
+            keyboardDidHideListener.remove();
+            keyboardDidShowListener.remove();
+        };
+    }, []);
 
     const loadData = async (silent = false) => {
         if (!silent) setLoading(true);
@@ -66,8 +119,23 @@ export default function MarketsScreen() {
             setChartHistory(hRes);
         }
 
+        if (user && !isGuest) {
+            loadUserPurchasingPower();
+        }
+
         if (!silent) setLoading(false);
         setRefreshing(false);
+    };
+
+    const loadUserPurchasingPower = async () => {
+        // Fetch both chart history AND exact last salary record
+        const [chartData, lastRecord] = await Promise.all([
+            getUserPurchasingPower(),
+            getLastSalaryEntry()
+        ]);
+
+        setUserPurchasingPower(chartData);
+        setLastSalaryRecord(lastRecord);
     };
 
     useFocusEffect(
@@ -75,6 +143,42 @@ export default function MarketsScreen() {
             loadData();
         }, [])
     );
+
+    // Load user data when switching to Salary mode or on User change
+    useEffect(() => {
+        if (user && !isGuest) {
+            setChartMode('USER_SALARY');
+            loadUserPurchasingPower();
+        } else {
+            // User logged out or switched to guest -> Clear sensitive user data
+            setUserPurchasingPower([]);
+            setLastSalaryRecord(null);
+        }
+    }, [user, isGuest]);
+
+    // Header Right injection removed per UI request
+    // Calculator button moved to content body next to "ALIM GÜCÜ" header
+
+    // Handle Auto-Save after Login
+    useEffect(() => {
+        const handlePendingSave = async () => {
+            if (user && !isGuest && pendingSalaryData) {
+                console.log("Auto-saving pending salary:", pendingSalaryData);
+                const { amount, validFrom } = pendingSalaryData;
+                const { success } = await upsertUserSalary(amount, validFrom);
+
+                if (success) {
+                    setPendingSalaryData(null);
+                    await loadUserPurchasingPower();
+                    setChartMode('USER_SALARY');
+                    Alert.alert("Başarılı", "Giriş yapıldı, maaşınız kaydedildi ve analiz hazır!");
+                } else {
+                    Alert.alert("Hata", "Maaş kaydedilirken bir sorun oluştu.");
+                }
+            }
+        };
+        handlePendingSave();
+    }, [user, isGuest, pendingSalaryData]);
 
     useEffect(() => {
         // Auto-refresh every 60 seconds
@@ -101,11 +205,27 @@ export default function MarketsScreen() {
         };
     }, []);
 
-
-
     const onRefresh = () => {
         setRefreshing(true);
         loadData();
+    };
+
+    const handleUnlockPremium = () => {
+        alert("Premium özelliği yakında!");
+    };
+
+    const handleSalarySuccess = (data: { amount: number, validFrom: string }) => {
+        // If user is guest (or not cached yet) and passes an amount, it means they clicked save.
+        if ((!user || isGuest) && data) {
+            // Guest Flow: Store state and prompt login
+            setPendingSalaryData(data);
+            setSalaryModalVisible(false);
+            router.push('/login-modal');
+        } else {
+            // Logged In Flow
+            loadUserPurchasingPower();
+            setChartMode('USER_SALARY');
+        }
     };
 
     // Derived Data
@@ -118,6 +238,7 @@ export default function MarketsScreen() {
         switch (inflationSource) {
             case 'ENAG': val = indicators.inflation.enag.value; break;
             case 'İTO': val = indicators.inflation.ito.value; break;
+            case 'ORTALAMA': val = indicators.inflation.average.value; break;
             default: val = indicators.inflation.tuik.value; break;
         }
         return val ?? 0;
@@ -127,6 +248,7 @@ export default function MarketsScreen() {
     const cycleInflationSource = () => {
         if (inflationSource === 'TÜİK') setInflationSource('ENAG');
         else if (inflationSource === 'ENAG') setInflationSource('İTO');
+        else if (inflationSource === 'İTO') setInflationSource('ORTALAMA');
         else setInflationSource('TÜİK');
     };
 
@@ -146,6 +268,8 @@ export default function MarketsScreen() {
         <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
+            {/* Moved Header Elements to Navigation Options */}
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 keyboardVerticalOffset={Platform.OS === "ios" ? 150 : 0}
@@ -159,10 +283,6 @@ export default function MarketsScreen() {
                     }
                     contentContainerStyle={{ paddingBottom: bottomPadding }}
                 >
-                    {/* --- Header Removed --- */}
-
-                    <Text className="text-white text-lg font-bold mb-4">Piyasalar</Text>
-
                     {loading && marketData.length === 0 ? (
                         <View className="mt-10 items-center">
                             <ActivityIndicator size="large" color="#3b82f6" />
@@ -170,63 +290,148 @@ export default function MarketsScreen() {
                         </View>
                     ) : (
                         <>
-                            {/* --- ECONOMIC INDICATORS SECTION (New) --- */}
+                            {/* --- ECONOMIC INDICATORS SECTION --- */}
                             <View className="mb-6">
-                                <Text className="text-slate-300 text-sm font-bold mb-3 uppercase tracking-wider">Ekonomik Göstergeler</Text>
-                                <View className="flex-row gap-3">
-                                    {/* 1. Asgari Ücret */}
-                                    <View className="flex-1 bg-[#151C2F] rounded-xl p-3 border border-slate-800/50 justify-between min-h-[100px]">
-                                        <View className="flex-row justify-between items-start">
-                                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">NET ASGARİ ÜCRET</Text>
-                                            <View className="bg-green-500/10 p-1 rounded-md">
-                                                <TrendingUp size={12} color="#22c55e" />
+                                {/* Header Text Removed */}
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ gap: 12, paddingRight: 20 }}
+                                >
+                                    {/* 1. Enflasyon (Dynamic) */}
+                                    <TouchableOpacity
+                                        activeOpacity={0.7}
+                                        onPress={cycleInflationSource}
+                                        className="bg-[#151C2F] rounded-2xl p-4 w-40 justify-between h-32 border border-slate-800/50"
+                                    >
+                                        <View>
+                                            <View className="flex-row justify-between items-start mb-1">
+                                                <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">ENFLASYON</Text>
+                                                <Text className="text-slate-500 text-[10px] font-medium">
+                                                    {indicators ? new Date(
+                                                        inflationSource === 'ENAG' ? indicators.inflation.enag.reference_date :
+                                                            inflationSource === 'İTO' ? indicators.inflation.ito.reference_date :
+                                                                inflationSource === 'ORTALAMA' ? indicators.inflation.average.reference_date :
+                                                                    indicators.inflation.tuik.reference_date
+                                                    ).toLocaleString('tr-TR', { month: 'long' }) : ''}
+                                                </Text>
+                                            </View>
+                                            <View className="flex-row items-center gap-2">
+                                                <Text className="text-white text-xs font-bold tracking-wider">{inflationSource}</Text>
+                                                <View className="bg-blue-500/20 px-1.5 py-0.5 rounded">
+                                                    <Text className="text-blue-400 text-[8px] font-bold">DEĞİŞTİR</Text>
+                                                </View>
                                             </View>
                                         </View>
                                         <View>
-                                            <Text className="text-white text-base font-bold">
-                                                {indicators ? indicators.minWage.value.toLocaleString('tr-TR') : '...'} ₺
-                                            </Text>
+                                            <View className="flex-row items-center justify-between">
+                                                <Text className="text-white text-xl font-bold">
+                                                    %{indicators ? getInflationValue().toFixed(2) : '...'}
+                                                </Text>
+                                                {(() => {
+                                                    const getTrend = () => {
+                                                        if (!indicators) return 'neutral';
+                                                        switch (inflationSource) {
+                                                            case 'ENAG': return indicators.inflation.enag.trend;
+                                                            case 'İTO': return indicators.inflation.ito.trend;
+                                                            case 'ORTALAMA': return indicators.inflation.average.trend;
+                                                            default: return indicators.inflation.tuik.trend;
+                                                        }
+                                                    };
+                                                    const trend = getTrend();
+                                                    if (trend === 'neutral') return null;
+                                                    const isUp = trend === 'up';
+                                                    return (
+                                                        <View className={`p-1 rounded-md ${isUp ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+                                                            {isUp ? <TrendingUp size={14} color="#ef4444" /> : <TrendingDown size={14} color="#22c55e" />}
+                                                        </View>
+                                                    );
+                                                })()}
+                                            </View>
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
 
                                     {/* 2. Açlık Sınırı */}
-                                    <View className="flex-1 bg-[#151C2F] rounded-xl p-3 border border-slate-800/50 justify-between min-h-[100px]">
+                                    <View className="bg-[#151C2F] rounded-2xl p-4 w-40 justify-between h-32 border border-slate-800/50">
                                         <View className="flex-row justify-between items-start">
-                                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">AÇLIK SINIRI</Text>
-                                            <View className="bg-red-500/10 p-1 rounded-md">
-                                                <TrendingUp size={12} color="#ef4444" />
-                                            </View>
+                                            <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">AÇLIK SINIRI</Text>
+                                            <Text className="text-slate-500 text-[10px] font-medium">
+                                                {indicators ? new Date(indicators.hunger.reference_date).toLocaleString('tr-TR', { month: 'long' }) : ''}
+                                            </Text>
                                         </View>
                                         <View>
-                                            <Text className="text-white text-base font-bold">
+
+                                            <Text className="text-white text-xl font-bold">
                                                 {indicators ? indicators.hunger.value.toLocaleString('tr-TR') : '...'} ₺
                                             </Text>
                                         </View>
                                     </View>
 
-                                    {/* 3. Enflasyon (Dynamic) */}
-                                    <TouchableOpacity
-                                        activeOpacity={0.7}
-                                        onPress={cycleInflationSource}
-                                        className="flex-1 bg-[#151C2F] rounded-xl p-3 border border-slate-800/50 justify-between min-h-[100px]"
-                                    >
-                                        <View className="flex-row justify-between items-center">
-                                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">{inflationSource} ENFLASYON</Text>
-                                            <View className="bg-blue-500/20 px-1 py-0.5 rounded flex-row items-center">
-                                                <Text className="text-blue-400 text-[8px] font-bold">DEĞİŞTIREBİLİRSİN</Text>
-                                            </View>
+                                    {/* 3. Asgari Ücret */}
+                                    <View className="bg-[#151C2F] rounded-2xl p-4 w-40 justify-between h-32 border border-slate-800/50">
+                                        <View className="flex-row justify-between items-start">
+                                            <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">NET ASGARİ ÜCRET</Text>
                                         </View>
                                         <View>
-                                            <Text className="text-white text-base font-bold">
-                                                %{indicators ? getInflationValue().toFixed(2) : '...'}
+
+                                            <Text className="text-white text-xl font-bold">
+                                                {indicators ? indicators.minWage.value.toLocaleString('tr-TR') : '...'} ₺
                                             </Text>
                                         </View>
-                                    </TouchableOpacity>
-                                </View>
+                                    </View>
+                                </ScrollView>
                             </View>
 
-                            {/* --- Living Standards Chart (New) --- */}
-                            <LivingStandardsChart data={chartHistory} loading={loading && chartHistory.length === 0} />
+                            {/* --- Living Standards Chart --- */}
+                            <View className="mb-6">
+                                <View className="flex-row items-center justify-between mb-4">
+                                    <View className="flex-row items-center gap-2">
+                                        <Text className="text-slate-300 text-sm font-bold uppercase tracking-wider">ALIM GÜCÜ</Text>
+                                        <TouchableOpacity
+                                            onPress={() => setSalaryModalVisible(true)}
+                                            className="bg-slate-800 p-1.5 rounded-lg border border-white/10"
+                                        >
+                                            <Ionicons name="calculator-outline" size={16} color="#3b82f6" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Custom Segmented Control */}
+                                    <View className="flex-row bg-slate-900 rounded-lg p-1 border border-white/5">
+                                        <TouchableOpacity
+                                            onPress={() => setChartMode('MIN_WAGE')}
+                                            className={`px-3 py-1.5 rounded-md ${chartMode === 'MIN_WAGE' ? 'bg-slate-700' : 'transparent'}`}
+                                        >
+                                            <Text className={`text-xs font-bold ${chartMode === 'MIN_WAGE' ? 'text-white' : 'text-slate-500'}`}>
+                                                Asgari Ücret
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isGuest) {
+                                                    // Allow guest to switch but they will see empty state with "Add Salary"
+                                                    // But the empty state requires USER_SALARY mode.
+                                                    // Let's allow it.
+                                                }
+                                                setChartMode('USER_SALARY');
+                                            }}
+                                            className={`px-3 py-1.5 rounded-md ${chartMode === 'USER_SALARY' ? 'bg-blue-600' : 'transparent'}`}
+                                        >
+                                            <Text className={`text-xs font-bold ${chartMode === 'USER_SALARY' ? 'text-white' : 'text-slate-500'}`}>
+                                                Maaşım
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                                <LivingStandardsChart
+                                    data={chartHistory}
+                                    loading={loading && chartHistory.length === 0}
+                                    dataMode={chartMode}
+                                    userPurchasingPowerData={userPurchasingPower}
+                                    isPremium={isPremium}
+                                    onUnlockPress={handleUnlockPremium}
+                                    onAddSalaryPress={() => setSalaryModalVisible(true)}
+                                />
+                            </View>
 
                             {/* --- Grid Overview --- */}
                             <Text className="text-slate-300 text-sm font-bold mb-3 uppercase tracking-wider">Piyasa Genel Bakış</Text>
@@ -316,6 +521,16 @@ export default function MarketsScreen() {
                     )}
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            <SalaryInputModal
+                visible={isSalaryModalVisible}
+                onClose={() => setSalaryModalVisible(false)}
+                onSuccess={handleSalarySuccess}
+                currentSalary={lastSalaryRecord?.amount} // Use amount from actual record
+                isPremium={!!isPremium}
+                hasHistory={!!lastSalaryRecord} // Determine history based on actual record existence
+                lastSalaryDate={lastSalaryRecord?.valid_from}
+            />
         </SafeAreaView>
     );
 }

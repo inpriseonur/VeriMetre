@@ -81,9 +81,10 @@ export interface EconomicIndicators {
     minWage: { value: number, reference_date: string };
     hunger: { value: number, reference_date: string };
     inflation: {
-        tuik: { value: number, reference_date: string };
-        enag: { value: number, reference_date: string };
-        ito: { value: number, reference_date: string };
+        tuik: { value: number; reference_date: string; trend: 'up' | 'down' | 'neutral' };
+        enag: { value: number; reference_date: string; trend: 'up' | 'down' | 'neutral' };
+        ito: { value: number; reference_date: string; trend: 'up' | 'down' | 'neutral' };
+        average: { value: number; reference_date: string; trend: 'up' | 'down' | 'neutral' };
     };
 }
 
@@ -104,32 +105,47 @@ export const getEconomicIndicators = async (): Promise<EconomicIndicators | null
 
         // 2. Get Inflation Data - Fetch separately to find latest NON-NULL for each
         // We run these in parallel for speed
-        const [tuikRes, enagRes, itoRes] = await Promise.all([
+        const [tuikRes, enagRes, itoRes, avgRes] = await Promise.all([
             // TUIK
             supabase
                 .from('view_living_standards')
                 .select('inflation_tuik, reference_date')
                 .not('inflation_tuik', 'is', null)
                 .order('reference_date', { ascending: false })
-                .limit(1)
-                .single(),
+                .limit(2),
             // ENAG
             supabase
                 .from('view_living_standards')
                 .select('inflation_enag, reference_date')
                 .not('inflation_enag', 'is', null)
                 .order('reference_date', { ascending: false })
-                .limit(1)
-                .single(),
+                .limit(2),
             // ITO
             supabase
                 .from('view_living_standards')
                 .select('inflation_ito, reference_date')
                 .not('inflation_ito', 'is', null)
                 .order('reference_date', { ascending: false })
-                .limit(1)
-                .single()
+                .limit(2),
+            // AVERAGE (New)
+            supabase
+                .from('view_living_standards')
+                .select('inflation_average, reference_date')
+                .not('inflation_average', 'is', null)
+                .order('reference_date', { ascending: false })
+                .limit(2)
         ]);
+
+        const getTrend = (current: number, previous: number): 'up' | 'down' | 'neutral' => {
+            if (current > previous) return 'up';
+            if (current < previous) return 'down';
+            return 'neutral';
+        };
+
+        const tuikData = tuikRes.data || [];
+        const enagData = enagRes.data || [];
+        const itoData = itoRes.data || [];
+        const avgData = avgRes.data || [];
 
         return {
             minWage: {
@@ -142,16 +158,24 @@ export const getEconomicIndicators = async (): Promise<EconomicIndicators | null
             },
             inflation: {
                 tuik: {
-                    value: tuikRes.data?.inflation_tuik || 0,
-                    reference_date: tuikRes.data?.reference_date || baseData.reference_date
+                    value: tuikData[0]?.inflation_tuik || 0,
+                    reference_date: tuikData[0]?.reference_date || baseData.reference_date,
+                    trend: getTrend(tuikData[0]?.inflation_tuik || 0, tuikData[1]?.inflation_tuik || 0)
                 },
                 enag: {
-                    value: enagRes.data?.inflation_enag || 0,
-                    reference_date: enagRes.data?.reference_date || baseData.reference_date
+                    value: enagData[0]?.inflation_enag || 0,
+                    reference_date: enagData[0]?.reference_date || baseData.reference_date,
+                    trend: getTrend(enagData[0]?.inflation_enag || 0, enagData[1]?.inflation_enag || 0)
                 },
                 ito: {
-                    value: itoRes.data?.inflation_ito || 0,
-                    reference_date: itoRes.data?.reference_date || baseData.reference_date
+                    value: itoData[0]?.inflation_ito || 0,
+                    reference_date: itoData[0]?.reference_date || baseData.reference_date,
+                    trend: getTrend(itoData[0]?.inflation_ito || 0, itoData[1]?.inflation_ito || 0)
+                },
+                average: {
+                    value: avgData[0]?.inflation_average || 0,
+                    reference_date: avgData[0]?.reference_date || baseData.reference_date,
+                    trend: getTrend(avgData[0]?.inflation_average || 0, avgData[1]?.inflation_average || 0)
                 }
             }
         };
@@ -169,7 +193,7 @@ export const getLatestLivingStandards = async (): Promise<ViewLivingStandards | 
 
 export const getLivingStandardsHistory = async (limit: number = 13): Promise<ViewLivingStandards[]> => {
     try {
-        // Fetch last N months descending (latest first)
+        // Fetch last N months descending (latest first) to ensure we get the *latest* data
         const { data, error } = await supabase
             .from('view_living_standards')
             .select('*')
@@ -181,10 +205,123 @@ export const getLivingStandardsHistory = async (limit: number = 13): Promise<Vie
             return [];
         }
 
-        // Reverse to have chronological order (Jan -> Dec)
-        return (data || []).reverse();
+        // Sort Ascending (Oldest -> Newest)
+        return (data || []).sort((a, b) => new Date(a.reference_date).getTime() - new Date(b.reference_date).getTime());
     } catch (err) {
         console.error('getLivingStandardsHistory exception:', err);
         return [];
+    }
+};
+
+// --- Personal Purchasing Power Module ---
+
+export interface UserPurchasingPower {
+    reference_date: string;
+    user_salary: number;
+    user_gold_equivalent: number;
+    user_usd_equivalent: number;
+    inflation_rate: number;
+}
+
+export const getUserPurchasingPower = async (): Promise<UserPurchasingPower[]> => {
+    try {
+        const { data, error } = await supabase.rpc('get_user_purchasing_power');
+
+        if (error) {
+            console.error('getUserPurchasingPower error:', error);
+            return [];
+        }
+
+        // Sort Ascending (Oldest -> Newest)
+        return (data || []).sort((a: any, b: any) => new Date(a.reference_date).getTime() - new Date(b.reference_date).getTime());
+    } catch (err) {
+        console.error('getUserPurchasingPower exception:', err);
+        return [];
+    }
+};
+
+export const upsertUserSalary = async (amount: number, validFrom: string): Promise<{ success: boolean; error?: any }> => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { success: false, error: 'User not authenticated' };
+
+        // Using 'salary_history' based on user report
+        // Assuming unique constraint is on (user_id, valid_from) or we just insert if it's history
+        // If it is truly history, maybe we SHOULD be inserting new rows every time? 
+        // But the previous error 'PGRST205' said table 'user_salaries' not found. 
+        // So 'salary_history' must be the correct one.
+
+        const { error } = await supabase
+            .from('salary_history')
+            .upsert({
+                user_id: user.id,
+                amount: amount,
+                valid_from: validFrom
+            }, { onConflict: 'user_id, valid_from' });
+
+        if (error) {
+            console.error('upsertUserSalary error:', error);
+            return { success: false, error };
+        }
+
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err };
+    }
+};
+
+export const getLastSalaryEntry = async (): Promise<{ amount: number, valid_from: string } | null> => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return null;
+
+        const { data, error } = await supabase
+            .from('salary_history')
+            .select('amount, valid_from')
+            .eq('user_id', user.id)
+            .order('valid_from', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (error) {
+            // It's normal to have no rows if user never entered salary
+            if (error.code !== 'PGRST116') {
+                console.error('getLastSalaryEntry error:', error);
+            }
+            return null;
+        }
+
+        return data;
+    } catch (err) {
+        console.error('getLastSalaryEntry exception:', err);
+        return null;
+    }
+};
+
+export const getActiveAnnouncement = async (): Promise<import('@/types/database').Announcement | null> => {
+    try {
+        const { data, error } = await supabase.rpc('get_active_announcement');
+
+        if (error) {
+            console.error('getActiveAnnouncement error:', error);
+            return null;
+        }
+
+        if (!data) return null;
+
+        // Create a normalized object
+        let announcement = data;
+
+        // If it's an array (which is common for RPCs returning setof record), take the first item
+        if (Array.isArray(data)) {
+            if (data.length === 0) return null;
+            announcement = data[0];
+        }
+
+        console.log('Active Announcement Data:', announcement);
+        return announcement as import('@/types/database').Announcement;
+    } catch (err) {
+        console.error('getActiveAnnouncement exception:', err);
+        return null;
     }
 };

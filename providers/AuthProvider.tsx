@@ -23,6 +23,7 @@ type AuthContextType = {
     user: User | null;
     isLoading: boolean;
     isGuest: boolean;
+    isPremium: boolean;
     resetKey: number; // Increments on logout to signal components to clear their data
     signInWithGoogle: () => Promise<boolean>;
     signOut: () => Promise<void>;
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     isLoading: true,
     isGuest: false,
+    isPremium: false,
     resetKey: 0,
     signInWithGoogle: async () => false,
     signOut: async () => { },
@@ -47,13 +49,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isGuest, setIsGuest] = useState(false);
+    const [isPremium, setIsPremium] = useState(false);
     const [resetKey, setResetKey] = useState(0);
+
+    const fetchProfile = async (userId: string) => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('is_premium')
+                .eq('id', userId)
+                .single();
+
+            if (data) {
+                setIsPremium(data.is_premium || false);
+            }
+        } catch (err) {
+            console.error('Error fetching profile:', err);
+        }
+    };
 
     useEffect(() => {
         // 1. Check existing session
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
-            setUser(session ? session.user : null);
+            const currentUser = session ? session.user : null;
+            setUser(currentUser);
+
+            if (currentUser) {
+                fetchProfile(currentUser.id);
+            }
+
             setIsLoading(false);
         });
 
@@ -61,10 +86,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             console.log("Auth State Changed:", _event);
             setSession(session);
-            setUser(session ? session.user : null);
+            const currentUser = session ? session.user : null;
+            setUser(currentUser);
 
             if (session) {
                 setIsGuest(false);
+                if (currentUser) fetchProfile(currentUser.id);
+            } else {
+                setIsPremium(false);
             }
             setIsLoading(false);
         });
@@ -140,6 +169,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setSession(null);
             setUser(null);
             setIsGuest(false);
+            setIsPremium(false);
 
             // Increment resetKey - Components watching this will clear their data
             setResetKey(prev => prev + 1);
@@ -154,6 +184,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const setGuestMode = () => {
         setIsGuest(true);
+        setIsPremium(false); // Guests are not premium
     };
 
     return (
@@ -162,6 +193,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             user,
             isLoading,
             isGuest,
+            isPremium,
             resetKey,
             signInWithGoogle,
             signOut,

@@ -34,6 +34,16 @@ export interface ViewInflationCalculated {
     calculated_ytd_rate?: number; // Optional for safety if view not fully migrated yet
 }
 
+export interface Announcement {
+    id: number;
+    title: string;
+    message: string;
+    target_screen: string;
+    target_params?: any;
+    icon_name: string;
+    bg_color: string;
+}
+
 export interface ViewLivingStandards {
     reference_date: string;
     hunger_threshold: number;

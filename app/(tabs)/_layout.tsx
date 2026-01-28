@@ -60,8 +60,13 @@ export default function TabLayout() {
           backgroundColor: '#0F172A',
           borderBottomWidth: 1,
           borderBottomColor: '#1E293B',
+          height: Platform.OS === 'ios' ? 110 : 80, // Taller header for modern feel
         },
-        headerTitle: () => <HeaderLogo />, // Use Logo component
+        headerTitleStyle: {
+          fontSize: 24,
+          fontWeight: 'bold',
+          color: 'white',
+        },
         headerTitleAlign: 'left', // Align left
         headerLeftContainerStyle: { paddingLeft: 10 }, // Add padding
         headerRight: () => <HeaderProfileButton />,
@@ -85,6 +90,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Ana Sayfa', // Fallback
+          headerTitle: () => <HeaderLogo />, // Logo ONLY on Home
           tabBarLabel: 'Ana Sayfa',
           tabBarIcon: ({ color }) => <House size={24} color={color} />,
         }}

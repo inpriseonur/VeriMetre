@@ -275,7 +275,7 @@ export default function AutoScreen() {
 
                 {/* --- Piyasa Nabzı (Header Cards) --- */}
                 <View className="mb-8">
-                    <Text className="text-white text-lg font-bold mb-3">Piyasa Nabzı</Text>
+                    {/* Sub-header removed */}
 
                     <ScrollView
                         horizontal

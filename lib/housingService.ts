@@ -421,3 +421,75 @@ export const getRealEstateMacroHistory = async (monthsBack: number = 60): Promis
         return { data: null, source: 'cache' };
     }
 };
+
+export interface TrendPermitData {
+    period_label: string;
+    permit_count: number;
+    avg_m2: number;
+    year_month: string;
+}
+
+const HOUSING_PERMIT_TREND_CACHE_KEY = 'housing_permit_trend_cache';
+
+export const getHousingPermitTrends = async (monthsBack: number = 24): Promise<{ data: TrendPermitData[] | null; source: 'cache' | 'rpc' }> => {
+    try {
+        const cacheKey = `${HOUSING_PERMIT_TREND_CACHE_KEY}_${monthsBack}`;
+        const refDateKey = `${cacheKey}_ref_date`;
+
+        const cachedString = await AsyncStorage.getItem(cacheKey);
+        let cachedData: TrendPermitData[] | null = null;
+
+        if (cachedString) {
+            cachedData = JSON.parse(cachedString);
+        }
+
+        const freshDate = await checkHousingFreshness();
+        if (!freshDate) {
+            return { data: cachedData, source: 'cache' };
+        }
+
+        const lastRefDate = await AsyncStorage.getItem(refDateKey);
+        const isCacheStale = !cachedData || !lastRefDate || (new Date(freshDate) > new Date(lastRefDate));
+
+        if (isCacheStale) {
+            console.log(`🏗️ Konut İzni Trend (${monthsBack} Ay) Cache bayatlamış. RPC çağrılıyor...`);
+            const { data, error } = await supabase.rpc('get_housing_permit_trends', { months_back: monthsBack });
+
+            if (error) {
+                console.warn('Permit Trend RPC Hatası (Parametreli):', error.message);
+
+                // Fallback: Try calling without parameters
+                console.log('⚠️ Parametresiz RPC deneniyor...');
+                const { data: fallbackData, error: fallbackError } = await supabase.rpc('get_housing_permit_trends');
+
+                if (fallbackError || !fallbackData) {
+                    console.error('Permit Trend RPC Hatası (Parametresiz):', fallbackError);
+                    return { data: cachedData, source: 'cache' };
+                }
+
+                const newData: TrendPermitData[] = fallbackData as TrendPermitData[];
+                await AsyncStorage.setItem(cacheKey, JSON.stringify(newData));
+                await AsyncStorage.setItem(refDateKey, freshDate);
+
+                return { data: newData, source: 'rpc' };
+            }
+
+            if (!data) {
+                return { data: cachedData, source: 'cache' };
+            }
+
+            const newData: TrendPermitData[] = data as TrendPermitData[];
+            await AsyncStorage.setItem(cacheKey, JSON.stringify(newData));
+            await AsyncStorage.setItem(refDateKey, freshDate);
+
+            return { data: newData, source: 'rpc' };
+        } else {
+            console.log(`✅ Konut İzni Trend (${monthsBack} Ay) Cache güncel.`);
+            return { data: cachedData, source: 'cache' };
+        }
+
+    } catch (error) {
+        console.error('getHousingPermitTrends genel hata:', error);
+        return { data: null, source: 'cache' };
+    }
+};
