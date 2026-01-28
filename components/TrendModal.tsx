@@ -1,10 +1,9 @@
 import { BlurView } from 'expo-blur';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Building2, LandPlot, Lock, X } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
-import { Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AreaChart } from 'react-native-gifted-charts';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import React, { useEffect, useMemo, useState } from 'react';
+import { Modal, StatusBar, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { LineChart } from 'react-native-gifted-charts';
 
 export interface TrendDataPoint {
     period_label: string;
@@ -19,12 +18,28 @@ interface TrendModalProps {
     title: string;
     data: TrendDataPoint[];
     isPremium: boolean;
+    isAuthenticated: boolean;
+    onLogin?: () => void;
     onUpgrade?: () => void;
 }
 
-export default function TrendModal({ visible, onClose, title, data, isPremium, onUpgrade }: TrendModalProps) {
+export default function TrendModal({ visible, onClose, title, data, isPremium, isAuthenticated, onLogin, onUpgrade }: TrendModalProps) {
+    const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
     const [activeTab, setActiveTab] = useState<'COUNT' | 'AVG_M2'>('COUNT');
     const [timeFilter, setTimeFilter] = useState<'6M' | '1Y' | 'ALL'>('1Y');
+
+    // --- Orientation & Status Bar Logic ---
+    useEffect(() => {
+        // Lock to landscape and hide status bar when mounted
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        StatusBar.setHidden(true, 'slide');
+
+        // Return to portrait and show status bar when unmounted
+        return () => {
+            ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+            StatusBar.setHidden(false, 'slide');
+        };
+    }, []);
 
     // --- Filter Logic ---
     const filteredData = useMemo(() => {
@@ -57,12 +72,13 @@ export default function TrendModal({ visible, onClose, title, data, isPremium, o
 
 
     const renderChart = () => (
-        <View className="items-center">
-            <AreaChart
+        <View style={{ alignItems: 'center' }}>
+            <LineChart
+                areaChart
                 data={chartData}
-                height={250}
-                width={SCREEN_WIDTH - 64}
-                spacing={40}
+                height={SCREEN_HEIGHT * 0.55} // Use generic height based on screen
+                width={SCREEN_WIDTH - 100} // Wider in landscape
+                spacing={SCREEN_WIDTH / (chartData.length + 2)} // Dynamic spacing
                 initialSpacing={20}
                 color={activeTab === 'COUNT' ? "#3b82f6" : "#22c55e"}
                 startFillColor={activeTab === 'COUNT' ? "#3b82f6" : "#22c55e"}
@@ -117,79 +133,110 @@ export default function TrendModal({ visible, onClose, title, data, isPremium, o
             visible={visible}
             animationType="slide"
             presentationStyle="fullScreen"
+            statusBarTranslucent={true}
             onRequestClose={onClose}
         >
-            <View className="flex-1 bg-[#0B1121] px-5 pt-12">
-                {/* Header */}
-                <View className="flex-row justify-between items-center mb-6">
-                    <Text className="text-white text-xl font-bold">{title}</Text>
+            <View className="flex-1 bg-[#0B1121] px-5 pt-6 justify-between pb-6">
+
+                {/* Header - Compact for Landscape */}
+                <View className="flex-row justify-between items-center mb-2">
+                    <View className="flex-row items-center gap-4">
+                        <Text className="text-white text-xl font-bold">{title}</Text>
+
+                        {/* Tab Switcher - More compact */}
+                        <View className="flex-row bg-slate-900 p-1 rounded-xl">
+                            <TouchableOpacity
+                                className={`flex-row items-center justify-center py-1.5 px-3 rounded-lg gap-2 ${activeTab === 'COUNT' ? 'bg-slate-700' : ''}`}
+                                onPress={() => setActiveTab('COUNT')}
+                            >
+                                <Building2 size={14} color={activeTab === 'COUNT' ? 'white' : '#64748b'} />
+                                <Text className={`${activeTab === 'COUNT' ? 'text-white font-bold' : 'text-slate-500 font-medium'} text-[10px]`}>
+                                    Adet
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className={`flex-row items-center justify-center py-1.5 px-3 rounded-lg gap-2 ${activeTab === 'AVG_M2' ? 'bg-slate-700' : ''}`}
+                                onPress={() => setActiveTab('AVG_M2')}
+                            >
+                                <LandPlot size={14} color={activeTab === 'AVG_M2' ? 'white' : '#64748b'} />
+                                <Text className={`${activeTab === 'AVG_M2' ? 'text-white font-bold' : 'text-slate-500 font-medium'} text-[10px]`}>
+                                    Ortalama m²
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
                     <TouchableOpacity onPress={onClose} className="bg-slate-800 p-2 rounded-full">
                         <X size={24} color="#cbd5e1" />
                     </TouchableOpacity>
                 </View>
 
-                {/* Tab Switcher */}
-                <View className="flex-row bg-slate-900 p-1 rounded-xl mb-6 mx-4">
-                    <TouchableOpacity
-                        className={`flex-1 flex-row items-center justify-center py-2 rounded-lg gap-2 ${activeTab === 'COUNT' ? 'bg-slate-700' : ''}`}
-                        onPress={() => setActiveTab('COUNT')}
-                    >
-                        <Building2 size={16} color={activeTab === 'COUNT' ? 'white' : '#64748b'} />
-                        <Text className={`${activeTab === 'COUNT' ? 'text-white font-bold' : 'text-slate-500 font-medium'} text-xs`}>
-                            Adet
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        className={`flex-1 flex-row items-center justify-center py-2 rounded-lg gap-2 ${activeTab === 'AVG_M2' ? 'bg-slate-700' : ''}`}
-                        onPress={() => setActiveTab('AVG_M2')}
-                    >
-                        <LandPlot size={16} color={activeTab === 'AVG_M2' ? 'white' : '#64748b'} />
-                        <Text className={`${activeTab === 'AVG_M2' ? 'text-white font-bold' : 'text-slate-500 font-medium'} text-xs`}>
-                            Ortalama m²
-                        </Text>
-                    </TouchableOpacity>
-                </View>
 
                 {/* Main Content Area */}
-                <View className="flex-1 justify-center relative bg-slate-900/30 rounded-3xl border border-white/5 mx-[-10] p-4 mb-10">
+                <View className="flex-1 justify-center relative bg-slate-900/30 rounded-3xl border border-white/5 p-4 mb-4">
 
                     {/* The Chart (Always Rendered) */}
                     {renderChart()}
 
-                    {/* Premium Blur Overlay */}
-                    {!isPremium && (
+                    {/* Overlay Logic: Guest OR Free User */}
+                    {(!isAuthenticated || !isPremium) && (
                         <BlurView
-                            intensity={40}
+                            intensity={100}
                             tint="dark"
-                            style={[StyleSheet.absoluteFill, { borderRadius: 24, justifyContent: 'center', alignItems: 'center', zIndex: 10 }]}
+                            style={[StyleSheet.absoluteFill, {
+                                borderRadius: 24,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                zIndex: 10,
+                                overflow: 'hidden' // Ensure blur is contained
+                            }]}
                         >
-                            <View className="bg-black/60 p-6 rounded-2xl items-center border border-white/10 w-[80%]">
+                            <View className="bg-black/60 p-6 rounded-2xl items-center border border-white/10 w-[60%]">
                                 <View className="bg-yellow-500/20 p-4 rounded-full mb-4">
                                     <Lock size={32} color="#fbbf24" strokeWidth={2.5} />
                                 </View>
-                                <Text className="text-white text-lg font-bold text-center mb-2">Trend Analizini Görüntüle</Text>
-                                <Text className="text-slate-300 text-center text-sm mb-6 leading-5">
-                                    Konut piyasasının tarihsel değişimini ve m² trendlerini incelemek için Premium'a geçin.
-                                </Text>
-                                <TouchableOpacity
-                                    onPress={onUpgrade}
-                                    className="bg-yellow-500 w-full py-3 rounded-xl active:bg-yellow-600"
-                                >
-                                    <Text className="text-black font-bold text-center">Premium'a Yükselt</Text>
-                                </TouchableOpacity>
+
+                                {/* Content based on Auth Status */}
+                                {!isAuthenticated ? (
+                                    <>
+                                        <Text className="text-white text-lg font-bold text-center mb-2">Analizleri Keşfedin</Text>
+                                        <Text className="text-slate-300 text-center text-sm mb-6 leading-5">
+                                            Bu veriye erişmek için lütfen giriş yapın.
+                                        </Text>
+                                        <TouchableOpacity
+                                            onPress={onLogin}
+                                            className="bg-yellow-500 w-full py-3 rounded-xl active:bg-yellow-600"
+                                        >
+                                            <Text className="text-black font-bold text-center">Giriş Yap / Kayıt Ol</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text className="text-white text-lg font-bold text-center mb-2">Trend Analizini Görüntüle</Text>
+                                        <Text className="text-slate-300 text-center text-sm mb-6 leading-5">
+                                            Konut piyasasının tarihsel değişimini ve m² trendlerini incelemek için Premium'a geçin.
+                                        </Text>
+                                        <TouchableOpacity
+                                            onPress={onUpgrade}
+                                            className="bg-yellow-500 w-full py-3 rounded-xl active:bg-yellow-600"
+                                        >
+                                            <Text className="text-black font-bold text-center">Premium'a Yükselt</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
                             </View>
                         </BlurView>
                     )}
                 </View>
 
-                {/* Time Filters */}
-                <View className="flex-row justify-center gap-4 mb-10">
+                {/* Time Filters - Bottom Bar */}
+                <View className="flex-row justify-center gap-4">
                     {['6M', '1Y', 'ALL'].map((f) => (
                         <TouchableOpacity
                             key={f}
                             onPress={() => setTimeFilter(f as any)}
-                            disabled={!isPremium}
-                            className={`px-4 py-2 rounded-lg border ${timeFilter === f ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/10'} ${!isPremium ? 'opacity-30' : ''}`}
+                            disabled={!isPremium && isAuthenticated} // Disable only if logged in but free. Guests also disabled by overlay.
+                            className={`px-4 py-2 rounded-lg border ${timeFilter === f ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/10'} ${(!isPremium) ? 'opacity-30' : ''}`}
                         >
                             <Text className={`${timeFilter === f ? 'text-white' : 'text-slate-400'} font-bold text-xs`}>
                                 {f === 'ALL' ? 'Tümü 👑' : f === '6M' ? '6 Ay' : '1 Yıl'}

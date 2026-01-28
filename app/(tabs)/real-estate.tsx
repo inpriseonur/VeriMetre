@@ -1,4 +1,4 @@
-import { TrendDataPoint } from '@/components/TrendModal';
+import TrendModal, { TrendDataPoint } from '@/components/TrendModal';
 import { CityItem, CityTrendData, getActiveCities, getCitySalesTrend, getHousingPermitTrends, getRealEstateHeader, getRealEstateMacroHistory, getRealEstateSupplyStats, getSalesBreakdown, RealEstateHeaderStats, RealEstateSalesBreakdown, RealEstateSupplyStats } from '@/lib/housingService';
 import { useAuth } from '@/providers/AuthProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,8 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CAROUSEL_WIDTH = SCREEN_WIDTH - 40; // px-5 = 20px padding each side
 
+import { useRouter } from 'expo-router';
+
 export default function RealEstateScreen() {
-    const { isPremium } = useAuth();
+    const router = useRouter();
+    const { isPremium, session } = useAuth();
     const [isGlobalLoading, setGlobalLoading] = useState(true); // Initial load
     const [isSalesLoading, setSalesLoading] = useState(false); // For sales section updates
     const [refreshing, setRefreshing] = useState(false);
@@ -253,11 +256,12 @@ export default function RealEstateScreen() {
                                 </View>
                             ) : (
                                 <>
-                                    <View className="flex-row justify-between items-start">
+                                    <View className="flex-row justify-between items-start mb-2">
                                         <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">Konut Kredisi</Text>
-                                        <Text className="text-slate-500 text-[10px]">{getFormattedDate(headerStats.interest_card.reference_date)}</Text>
+                                        {/* Placeholder for Expand Icon if needed later */}
                                     </View>
                                     <View>
+                                        <Text className="text-slate-500 text-[10px] mb-0.5 font-medium uppercase">{getFormattedDate(headerStats.interest_card.reference_date)}</Text>
                                         <Text className="text-white text-2xl font-bold mb-1">%{headerStats.interest_card.value}</Text>
 
                                         {/* Logic: UP -> RED (Bad) */}
@@ -284,11 +288,12 @@ export default function RealEstateScreen() {
                                 </View>
                             ) : (
                                 <>
-                                    <View className="flex-row justify-between items-start">
+                                    <View className="flex-row justify-between items-start mb-2">
                                         <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">Toplam Satış</Text>
-                                        <Text className="text-slate-500 text-[10px]">{getFormattedDate(headerStats.sales_card.reference_date)}</Text>
+                                        {/* Placeholder for Expand Icon if needed later */}
                                     </View>
                                     <View>
+                                        <Text className="text-slate-500 text-[10px] mb-0.5 font-medium uppercase">{getFormattedDate(headerStats.sales_card.reference_date)}</Text>
                                         <Text className="text-white text-xl font-bold mb-1">{formatNumber(headerStats.sales_card.value)}</Text>
 
                                         {/* Logic: UP -> GREEN (Good) */}
@@ -315,11 +320,12 @@ export default function RealEstateScreen() {
                                 </View>
                             ) : (
                                 <>
-                                    <View className="flex-row justify-between items-start">
+                                    <View className="flex-row justify-between items-start mb-2">
                                         <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">Maliyet End.</Text>
-                                        <Text className="text-slate-500 text-[10px]">{getFormattedDate(headerStats.cost_card.reference_date)}</Text>
+                                        {/* Placeholder for Expand Icon if needed later */}
                                     </View>
                                     <View>
+                                        <Text className="text-slate-500 text-[10px] mb-0.5 font-medium uppercase">{getFormattedDate(headerStats.cost_card.reference_date)}</Text>
                                         <Text className="text-white text-2xl font-bold mb-1">{headerStats.cost_card.value}</Text>
 
                                         {/* Logic: UP -> RED (Bad) */}
@@ -1098,6 +1104,27 @@ export default function RealEstateScreen() {
                     </TouchableOpacity>
                 </TouchableOpacity>
             </Modal>
+
+            {/* Trend Analysis Modal */}
+            {trendModalVisible && (
+                <TrendModal
+                    visible={true}
+                    onClose={() => setTrendModalVisible(false)}
+                    title="Yeni Konut İzni Trendi"
+                    data={trendModalData}
+                    isPremium={isPremium}
+                    isAuthenticated={!!session}
+                    onLogin={() => {
+                        setTrendModalVisible(false);
+                        router.push('/login-modal');
+                    }}
+                    onUpgrade={() => {
+                        // Navigate to paywall or handle upgrade
+                        console.log('Upgrade clicked');
+                        setTrendModalVisible(false);
+                    }}
+                />
+            )}
 
         </SafeAreaView >
     );
