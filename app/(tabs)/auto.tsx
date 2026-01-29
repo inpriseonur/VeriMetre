@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/Skeleton';
 import { AutoPageHeaderStats, AutoSalesHistoryItem, BrandAnalysis, FuelAnalysisResponse, getAutoPageHeader, getBrandAnalysis, getFuelAnalysis, getSalesHistory } from '@/lib/autoService';
 import { Calendar, ChevronDown, ChevronUp, Layers, TrendingDown, TrendingUp, Zap } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -111,12 +112,16 @@ export default function AutoScreen() {
 
         let processedData = [];
 
-        if (trendFilter === '1Y') {
-            // Last 12 Months - Reversed (Newest on Left)
-            const sliced = historyData.slice(-12);
-            const reversed = sliced.reverse();
+        // Ensure purely chronological sort first (Oldest -> Newest)
+        const sortedHistory = [...historyData].sort((a, b) =>
+            new Date(a.reference_date).getTime() - new Date(b.reference_date).getTime()
+        );
 
-            processedData = reversed.map(item => ({
+        if (trendFilter === '1Y') {
+            // Last 12 Months - Standard Chronological (Oldest on Left -> Newest on Right)
+            const sliced = sortedHistory.slice(-12);
+            // Removed reverse() to keep Oldest -> Newest
+            processedData = sliced.map(item => ({
                 value: item.quantity,
                 label: new Date(item.reference_date).toLocaleString('tr-TR', { month: 'short' }),
                 date: item.reference_date,
@@ -125,17 +130,17 @@ export default function AutoScreen() {
         } else {
             // 7Y Aggregation (Yearly Totals)
             const yearlyMap = new Map<number, number>();
-            historyData.forEach(item => {
+            sortedHistory.forEach(item => {
                 const year = new Date(item.reference_date).getFullYear();
                 const current = yearlyMap.get(year) || 0;
                 yearlyMap.set(year, current + item.quantity);
             });
-
+            // Keys sorted ascending (Oldest -> Newest)
             const years = Array.from(yearlyMap.keys()).sort((a, b) => a - b);
             const last7Years = years.slice(-7);
-            const reversedYears = last7Years.reverse();
+            // Removed reverse() to keep Oldest -> Newest
 
-            processedData = reversedYears.map(year => ({
+            processedData = last7Years.map(year => ({
                 value: yearlyMap.get(year) || 0,
                 label: year.toString(),
                 date: `${year}-01-01`,
@@ -144,10 +149,12 @@ export default function AutoScreen() {
         }
 
         return processedData.map((item, index) => {
-            const isLatest = index === 0;
+            // Newest is now the last item
+            const isLatest = index === processedData.length - 1;
 
             return {
                 ...item,
+                index, // Pass index for tooltip positioning logic
                 labelTextStyle: { color: 'gray', fontSize: 10 },
                 customDataPoint: isLatest && trendFilter === '1Y' ? () => (
                     <View
@@ -176,62 +183,101 @@ export default function AutoScreen() {
     const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
     // Chart Component (Reusable)
-    const renderChart = (width: number, height: number) => (
-        <LineChart
-            data={chartData}
-            areaChart
-            curved
-            startFillColor="#06b6d4"
-            startOpacity={0.8}
-            endFillColor="#06b6d4"
-            endOpacity={0.1}
-            initialSpacing={20}
-            color="#06b6d4"
-            thickness={3}
-            hideDataPoints={false}
-            dataPointsColor="#06b6d4"
-            dataPointsRadius={4}
-            xAxisLabelTextStyle={{ color: 'gray', fontSize: 10 }}
-            yAxisLabelWidth={45}
-            yAxisTextStyle={{ color: 'gray', fontSize: 10 }}
-            rulesColor="rgba(255,255,255,0.1)"
-            width={width}
-            height={height}
-            pointerConfig={{
-                pointerStripHeight: height,
-                pointerStripColor: 'lightgray',
-                pointerStripWidth: 2,
-                pointerColor: 'lightgray',
-                radius: 6,
-                pointerLabelWidth: 100,
-                pointerLabelHeight: 90,
-                activatePointersOnLongPress: false,
-                autoAdjustPointerLabelPosition: false,
-                pointerLabelComponent: (items: any) => {
-                    const item = items[0];
-                    return (
-                        <View
-                            style={{
-                                height: 90,
-                                width: 100,
-                                justifyContent: 'center',
-                                marginTop: -30,
-                                marginLeft: -40,
-                            }}>
-                            <View style={{ padding: 6, borderRadius: 8, backgroundColor: '#1e293b', opacity: 0.9 }}>
-                                <Text style={{ color: 'gray', fontSize: 10, marginBottom: 2, textAlign: 'center' }}>
-                                    {item.displayLabel}
-                                </Text>
-                                <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
-                                    {formatNumber(item.value)}
-                                </Text>
+    // Chart Component (Reusable)
+    const renderChart = (width: number, height: number) => {
+        // Calculate dynamic spacing to fit all points
+        // width - initialSpacing (20) - extra buffer (10) = width - 30
+        const dataLength = chartData.length || 1;
+        const spacing = (width - 30) / dataLength;
+
+        // Calculate Max Value for Headroom (prevent tooltip overflow)
+        const maxDataValue = Math.max(...chartData.map(d => d.value), 0);
+        const maxValue = maxDataValue * 1.2; // 20% headroom
+
+        return (
+            <LineChart
+                data={chartData}
+                areaChart
+                curved
+                maxValue={maxValue}
+                startFillColor="#06b6d4"
+                startOpacity={0.8}
+                endFillColor="#06b6d4"
+                endOpacity={0.1}
+                initialSpacing={20}
+                spacing={spacing}
+                color="#06b6d4"
+                thickness={3}
+                hideDataPoints={false}
+                dataPointsColor="#06b6d4"
+                dataPointsRadius={4}
+                xAxisLabelTextStyle={{ color: 'gray', fontSize: 10 }}
+                yAxisLabelWidth={45}
+                yAxisTextStyle={{ color: 'gray', fontSize: 10 }}
+                rulesColor="rgba(255,255,255,0.1)"
+                width={width}
+                height={height}
+                pointerConfig={{
+                    pointerStripHeight: height,
+                    pointerStripColor: 'lightgray',
+                    pointerStripWidth: 2,
+                    pointerColor: 'lightgray',
+                    radius: 6,
+                    pointerLabelWidth: 120,
+                    pointerLabelHeight: 90,
+                    activatePointersOnLongPress: true,
+                    autoAdjustPointerLabelPosition: false,
+                    shiftPointerLabelX: -10,
+                    shiftPointerLabelY: -20,
+                    pointerStripUptoDataPoint: true,
+                    pointerLabelComponent: (items: any) => {
+                        const item = items[0];
+                        if (!item) return null;
+
+                        // Check if item is one of the last 3 (rightmost)
+                        const isRightMost = item.index >= (dataLength - 3);
+
+                        return (
+                            <View
+                                style={{
+                                    height: 90,
+                                    width: 120,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    // Shift left significantly if it's on the right edge
+                                    transform: [{ translateX: isRightMost ? -50 : 0 }]
+                                }}>
+                                <View style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 8,
+                                    borderRadius: 10,
+                                    backgroundColor: '#1e293b',
+                                    opacity: 0.95,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.1)',
+                                    shadowColor: "#000",
+                                    shadowOffset: {
+                                        width: 0,
+                                        height: 2,
+                                    },
+                                    shadowOpacity: 0.25,
+                                    shadowRadius: 3.84,
+                                    elevation: 5,
+                                }}>
+                                    <Text style={{ color: '#94a3b8', fontSize: 10, marginBottom: 4, textAlign: 'center', fontWeight: '500' }}>
+                                        {item.displayLabel}
+                                    </Text>
+                                    <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold', textAlign: 'center' }}>
+                                        {formatNumber(item.value)}
+                                    </Text>
+                                </View>
                             </View>
-                        </View>
-                    );
-                },
-            }}
-        />
-    );
+                        );
+                    },
+                }}
+            />
+        );
+    };
 
     return (
         <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
@@ -286,9 +332,9 @@ export default function AutoScreen() {
                         <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4 w-40 justify-between h-32">
                             {loading || !headerStats ? (
                                 <View>
-                                    <View className="h-4 w-20 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-8 w-28 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-4 w-16 bg-slate-700 rounded animate-pulse" />
+                                    <Skeleton><View className="h-4 w-20 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-8 w-28 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-4 w-16 bg-slate-700 rounded" /></Skeleton>
                                 </View>
                             ) : (
                                 <>
@@ -316,9 +362,9 @@ export default function AutoScreen() {
                         <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4 w-44 justify-between h-32">
                             {loading || !headerStats ? (
                                 <View>
-                                    <View className="h-4 w-24 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-8 w-32 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-3 w-28 bg-slate-700 rounded animate-pulse" />
+                                    <Skeleton><View className="h-4 w-24 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-8 w-32 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-3 w-28 bg-slate-700 rounded" /></Skeleton>
                                 </View>
                             ) : (
                                 <>
@@ -340,9 +386,9 @@ export default function AutoScreen() {
                         <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4 w-40 justify-between h-32">
                             {loading || !headerStats ? (
                                 <View>
-                                    <View className="h-4 w-24 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-8 w-24 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-4 w-12 bg-slate-700 rounded animate-pulse" />
+                                    <Skeleton><View className="h-4 w-24 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-8 w-24 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-4 w-12 bg-slate-700 rounded" /></Skeleton>
                                 </View>
                             ) : (
                                 <>

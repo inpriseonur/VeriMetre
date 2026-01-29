@@ -5,7 +5,7 @@ import React from 'react';
 import { Image, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ProfileModal() {
-    const { session, signOut } = useAuth();
+    const { session, signOut, isPremium, subscriptionEndDate } = useAuth();
     const router = useRouter();
 
     if (!session) return null;
@@ -45,8 +45,10 @@ export default function ProfileModal() {
                 </View>
                 <Text className="text-white text-xl font-bold">{user.user_metadata?.full_name || 'Kullanıcı'}</Text>
                 <View className="flex-row items-center mt-1">
-                    <View className="w-2 h-2 rounded-full bg-green-500 mr-2" />
-                    <Text className="text-green-500 font-medium">Aktif Üye</Text>
+                    <View className={`w-2 h-2 rounded-full ${isPremium ? 'bg-amber-400' : 'bg-green-500'} mr-2`} />
+                    <Text className={`${isPremium ? 'text-amber-400' : 'text-green-500'} font-medium`}>
+                        {isPremium ? 'Premium Üye' : 'Standart Üye'}
+                    </Text>
                 </View>
             </View>
 
@@ -61,10 +63,17 @@ export default function ProfileModal() {
                 </View>
 
                 <View className="flex-row items-center">
-                    <Shield size={20} color="#F97316" />
+                    <Shield size={20} color={isPremium ? "#fbbf24" : "#94a3b8"} />
                     <View className="ml-3">
                         <Text className="text-slate-500 text-xs">Üyelik Tipi</Text>
-                        <Text className="text-white font-medium">Standart (Free)</Text>
+                        <Text className={`font-medium ${isPremium ? 'text-amber-400' : 'text-white'}`}>
+                            {isPremium ? 'Premium' : 'Standart (Free)'}
+                        </Text>
+                        {isPremium && subscriptionEndDate && (
+                            <Text className="text-slate-500 text-[10px] mt-0.5">
+                                Bitiş: {new Date(subscriptionEndDate).toLocaleDateString('tr-TR')}
+                            </Text>
+                        )}
                     </View>
                 </View>
             </View>

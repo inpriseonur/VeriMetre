@@ -24,6 +24,7 @@ type AuthContextType = {
     isLoading: boolean;
     isGuest: boolean;
     isPremium: boolean;
+    subscriptionEndDate: string | null;
     resetKey: number; // Increments on logout to signal components to clear their data
     signInWithGoogle: () => Promise<boolean>;
     signOut: () => Promise<void>;
@@ -36,6 +37,7 @@ const AuthContext = createContext<AuthContextType>({
     isLoading: true,
     isGuest: false,
     isPremium: false,
+    subscriptionEndDate: null,
     resetKey: 0,
     signInWithGoogle: async () => false,
     signOut: async () => { },
@@ -50,19 +52,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isGuest, setIsGuest] = useState(false);
     const [isPremium, setIsPremium] = useState(false);
+    const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
     const [resetKey, setResetKey] = useState(0);
 
     const fetchProfile = async (userId: string) => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('is_premium')
+                .select('is_premium, subscription_end_date')
                 .eq('id', userId)
                 .single();
 
             if (data) {
                 console.log("Profile data fetched:", data);
                 setIsPremium(data.is_premium || false);
+                setSubscriptionEndDate(data.subscription_end_date || null);
             } else {
                 console.log("No profile data found for user:", userId);
             }
@@ -200,6 +204,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             isLoading,
             isGuest,
             isPremium,
+            subscriptionEndDate,
             resetKey,
             signInWithGoogle,
             signOut,

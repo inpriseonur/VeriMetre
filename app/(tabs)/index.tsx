@@ -1,5 +1,6 @@
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import InflationChart from '@/components/InflationChart';
+import { Skeleton } from '@/components/Skeleton';
 import { AutoSummary, getAutoSummary } from '@/lib/autoService';
 import { getHousingSummary, HousingSummary } from '@/lib/housingService';
 import { getTuikSummary, TuikSummary } from '@/lib/inflationService';
@@ -189,8 +190,8 @@ export default function DashboardScreen() {
               {!inflationSummary ? (
                 // Skeleton Loading
                 <View>
-                  <View className="h-10 w-32 bg-slate-800 rounded-md mb-2 animate-pulse" />
-                  <View className="h-4 w-24 bg-slate-800 rounded-md animate-pulse" />
+                  <Skeleton><View className="h-10 w-32 bg-slate-800 rounded-md mb-2" /></Skeleton>
+                  <Skeleton><View className="h-4 w-24 bg-slate-800 rounded-md" /></Skeleton>
                 </View>
               ) : (
                 <View>
@@ -239,8 +240,8 @@ export default function DashboardScreen() {
             {!housingSummary ? (
               // Skeleton
               <View>
-                <View className="h-8 w-24 bg-slate-800 rounded-md mb-2 animate-pulse" />
-                <View className="h-4 w-16 bg-slate-800 rounded-md animate-pulse" />
+                <Skeleton><View className="h-8 w-24 bg-slate-800 rounded-md mb-2" /></Skeleton>
+                <Skeleton><View className="h-4 w-16 bg-slate-800 rounded-md" /></Skeleton>
               </View>
             ) : (
               <View className="flex-row items-center gap-1.5 flex-wrap">
@@ -280,8 +281,8 @@ export default function DashboardScreen() {
             {!autoSummary ? (
               // Skeleton
               <View>
-                <View className="h-8 w-24 bg-slate-800 rounded-md mb-2 animate-pulse" />
-                <View className="h-4 w-16 bg-slate-800 rounded-md animate-pulse" />
+                <Skeleton><View className="h-8 w-24 bg-slate-800 rounded-md mb-2" /></Skeleton>
+                <Skeleton><View className="h-4 w-16 bg-slate-800 rounded-md" /></Skeleton>
               </View>
             ) : (
               <View className="flex-row items-center gap-1.5 flex-wrap">

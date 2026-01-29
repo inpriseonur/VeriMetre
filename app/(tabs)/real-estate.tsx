@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/Skeleton';
 import TrendModal, { TrendDataPoint } from '@/components/TrendModal';
 import {
     CityItem,
@@ -344,8 +345,8 @@ export default function RealEstateScreen() {
                         <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4 w-40 justify-between h-32">
                             {isGlobalLoading || !headerStats ? (
                                 <View>
-                                    <View className="h-4 w-20 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-8 w-24 bg-slate-700 rounded mb-2 animate-pulse" />
+                                    <Skeleton><View className="h-4 w-20 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-8 w-24 bg-slate-700 rounded mb-2" /></Skeleton>
                                 </View>
                             ) : (
                                 <>
@@ -378,8 +379,8 @@ export default function RealEstateScreen() {
                         <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4 w-40 justify-between h-32">
                             {isGlobalLoading || !headerStats ? (
                                 <View>
-                                    <View className="h-4 w-20 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-8 w-28 bg-slate-700 rounded mb-2 animate-pulse" />
+                                    <Skeleton><View className="h-4 w-20 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-8 w-28 bg-slate-700 rounded mb-2" /></Skeleton>
                                 </View>
                             ) : (
                                 <>
@@ -412,8 +413,8 @@ export default function RealEstateScreen() {
                         <View className="bg-slate-800/50 border border-white/5 rounded-2xl p-4 w-40 justify-between h-32">
                             {isGlobalLoading || !headerStats ? (
                                 <View>
-                                    <View className="h-4 w-20 bg-slate-700 rounded mb-2 animate-pulse" />
-                                    <View className="h-8 w-24 bg-slate-700 rounded mb-2 animate-pulse" />
+                                    <Skeleton><View className="h-4 w-20 bg-slate-700 rounded mb-2" /></Skeleton>
+                                    <Skeleton><View className="h-8 w-24 bg-slate-700 rounded mb-2" /></Skeleton>
                                 </View>
                             ) : (
                                 <>
@@ -906,7 +907,7 @@ export default function RealEstateScreen() {
                 {/* --- Büyük Resim (Macro Cycle) Section --- */}
                 <View className="mb-24" >
                     <View className="flex-row justify-between items-center mb-4">
-                        <Text className="text-white text-lg font-bold">Büyük Resim</Text>
+                        <Text className="text-white text-lg font-bold">Satış & Faiz</Text>
                         <View className="flex-row bg-slate-800 rounded-lg p-1 border border-white/10">
                             <TouchableOpacity
                                 onPress={() => handleMacroFilterChange(24)}
@@ -961,7 +962,9 @@ export default function RealEstateScreen() {
                                             frontColor: '#4F46E5',
                                             secondaryValue: d.interest_rate,
                                             tooltipDate: formattedDate,
-                                            index: index
+                                            customData: {
+                                                index: index
+                                            }
                                         };
                                     })}
                                     barWidth={macroFilter === 60 ? 4 : 8}
@@ -976,8 +979,9 @@ export default function RealEstateScreen() {
 
                                     // Combo Chart Setup
                                     showLine
-                                    lineData={macroData.map(d => ({
+                                    lineData={macroData.map((d, i) => ({
                                         value: d.interest_rate,
+                                        customData: { index: i }
                                     }))}
                                     lineConfig={{
                                         isSecondary: true,
@@ -1010,10 +1014,19 @@ export default function RealEstateScreen() {
                                         activatePointersOnLongPress: false,
                                         autoAdjustPointerLabelPosition: false,
                                         pointerLabelComponent: (items: any) => {
-                                            const item = items[0];
+                                            // 1. Find the Bar Item (it contains the tooltipDate and main value)
+                                            const displayItem = items.find((i: any) => i.tooltipDate) || items[0];
+
+                                            // 2. Find the index (from either item, but prefer displayItem)
+                                            // Fallback to checking any item for index if displayItem doesn't have it
+                                            const indexItem = items.find((i: any) => i.customData?.index !== undefined);
+                                            const index = indexItem?.customData?.index ?? 0;
+
                                             const totalItems = macroData.length;
-                                            // Shift left for the last 11 items to prevent overflow
-                                            const isRightSide = item.index >= totalItems - 11;
+
+                                            // Shift left for the second half of the chart (safer for mobile)
+                                            // Previously was last 12, but user reported issues at index 35/60
+                                            const isRightSide = index > (totalItems / 2);
 
                                             return (
                                                 <View style={{
@@ -1023,18 +1036,18 @@ export default function RealEstateScreen() {
                                                     borderRadius: 4,
                                                     padding: 8,
                                                     // Dynamic positioning shift
-                                                    transform: [{ translateX: isRightSide ? -100 : 0 }]
+                                                    transform: [{ translateX: isRightSide ? -120 : 0 }]
                                                 }}>
-                                                    <Text style={{ color: 'white', fontSize: 12, marginBottom: 4 }}>{item.tooltipDate}</Text>
+                                                    <Text style={{ color: 'white', fontSize: 12, marginBottom: 4 }}>{displayItem.tooltipDate}</Text>
 
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                                                         <View style={{ width: 8, height: 8, backgroundColor: '#4F46E5', borderRadius: 4, marginRight: 4 }} />
-                                                        <Text style={{ color: 'lightgray', fontSize: 10 }}>Satış: {formatNumber(item.value)}</Text>
+                                                        <Text style={{ color: 'lightgray', fontSize: 10 }}>Satış: {formatNumber(displayItem.value)}</Text>
                                                     </View>
 
                                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                                         <View style={{ width: 8, height: 8, backgroundColor: '#F97316', borderRadius: 4, marginRight: 4 }} />
-                                                        <Text style={{ color: 'lightgray', fontSize: 10 }}>Faiz: %{item.secondaryValue}</Text>
+                                                        <Text style={{ color: 'lightgray', fontSize: 10 }}>Faiz: %{displayItem.secondaryValue}</Text>
                                                     </View>
                                                 </View>
                                             );

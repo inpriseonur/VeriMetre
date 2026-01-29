@@ -27,6 +27,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 import HeaderProfileButton from '@/components/HeaderProfileButton';
+import { Skeleton } from '@/components/Skeleton';
 
 // Available currencies for converter
 const CURRENCIES = [
@@ -268,13 +269,15 @@ export default function MarketsScreen() {
                             <View className="mb-6">
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 20 }}>
                                     {[1, 2, 3].map((i) => (
-                                        <View key={i} className="bg-slate-800/50 rounded-2xl p-4 w-40 h-32 border border-white/5 animate-pulse justify-between">
-                                            <View className="h-4 w-24 bg-slate-700 rounded" />
-                                            <View>
-                                                <View className="h-8 w-20 bg-slate-700 rounded mb-2" />
-                                                <View className="h-3 w-12 bg-slate-700 rounded" />
+                                        <Skeleton key={i} borderRadius={16}>
+                                            <View className="bg-slate-800/50 rounded-2xl p-4 w-40 h-32 border border-white/5 justify-between">
+                                                <View className="h-4 w-24 bg-slate-700 rounded" />
+                                                <View>
+                                                    <View className="h-8 w-20 bg-slate-700 rounded mb-2" />
+                                                    <View className="h-3 w-12 bg-slate-700 rounded" />
+                                                </View>
                                             </View>
-                                        </View>
+                                        </Skeleton>
                                     ))}
                                 </ScrollView>
                             </View>
@@ -282,23 +285,27 @@ export default function MarketsScreen() {
                             {/* --- Skeleton: Chart --- */}
                             <View className="mb-6">
                                 <View className="flex-row justify-between mb-4">
-                                    <View className="h-6 w-32 bg-slate-800/50 rounded animate-pulse" />
-                                    <View className="h-8 w-40 bg-slate-800/50 rounded animate-pulse" />
+                                    <Skeleton><View className="h-6 w-32 bg-slate-800/50 rounded" /></Skeleton>
+                                    <Skeleton><View className="h-8 w-40 bg-slate-800/50 rounded" /></Skeleton>
                                 </View>
-                                <View className="h-[300px] bg-slate-800/50 rounded-2xl border border-white/5 animate-pulse" />
+                                <Skeleton borderRadius={16}><View className="h-[300px] bg-slate-800/50 rounded-2xl border border-white/5" /></Skeleton>
                             </View>
 
                             {/* --- Skeleton: Grid Overview --- */}
                             <View className="mb-4">
-                                <View className="h-5 w-48 bg-slate-800/50 rounded mb-4 animate-pulse" />
+                                <Skeleton><View className="h-5 w-48 bg-slate-800/50 rounded mb-4" /></Skeleton>
                                 <View className="flex-row flex-wrap justify-between">
                                     {[1, 2, 3, 4, 5, 6].map((i) => (
-                                        <View key={i} className="bg-slate-800/50 w-[48%] h-24 mb-3 rounded-xl border border-white/5 animate-pulse p-3 justify-between">
-                                            <View className="flex-row justify-between">
-                                                <View className="h-4 w-10 bg-slate-700 rounded" />
-                                                <View className="h-4 w-12 bg-slate-700 rounded" />
-                                            </View>
-                                            <View className="h-7 w-20 bg-slate-700 rounded" />
+                                        <View key={i} className="w-[48%] mb-3">
+                                            <Skeleton borderRadius={12}>
+                                                <View className="bg-slate-800/50 h-24 rounded-xl border border-white/5 p-3 justify-between">
+                                                    <View className="flex-row justify-between">
+                                                        <View className="h-4 w-10 bg-slate-700 rounded" />
+                                                        <View className="h-4 w-12 bg-slate-700 rounded" />
+                                                    </View>
+                                                    <View className="h-7 w-20 bg-slate-700 rounded" />
+                                                </View>
+                                            </Skeleton>
                                         </View>
                                     ))}
                                 </View>
