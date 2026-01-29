@@ -32,17 +32,25 @@ export interface TrendModalProps {
     selectedPeriod?: 'monthly' | 'yearly';
     onPeriodChange?: (period: 'monthly' | 'yearly') => void;
     hideFilters?: boolean;
+    availableTimeFilters?: ('1Y' | '3Y' | '7Y' | 'ALL')[];
 }
 
-export default function TrendModal({
-    visible, onClose, title, data, isPremium, isAuthenticated,
-    onLogin, onUpgrade, filterType = 'DATE_RANGE',
-    showCityFilter, selectedCity, onCityChange,
-    selectedPeriod, onPeriodChange, hideFilters = false
-}: TrendModalProps) {
+export default function TrendModal(props: TrendModalProps) {
+    const {
+        visible, onClose, title, data, isPremium, isAuthenticated,
+        onLogin, onUpgrade, filterType = 'DATE_RANGE',
+        showCityFilter, selectedCity, onCityChange,
+        selectedPeriod, onPeriodChange, hideFilters = false
+    } = props;
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
     const [activeTab, setActiveTab] = useState<'PRIMARY' | 'SECONDARY'>('PRIMARY');
-    const [timeFilter, setTimeFilter] = useState<'1Y' | '3Y' | 'ALL'>('1Y');
+    const [timeFilter, setTimeFilter] = useState<'1Y' | '3Y' | '7Y' | 'ALL'>('1Y');
+
+    // Default filters if not provided
+    const defaultFilters: ('1Y' | '3Y' | 'ALL')[] = ['1Y', '3Y', 'ALL'];
+
+    // Configurable time filters
+    const availableFilters = props.availableTimeFilters || defaultFilters;
 
     // ... (City Filter State skipped, unchanged)
     const [cityList, setCityList] = useState<CityItem[]>([]);
@@ -111,6 +119,7 @@ export default function TrendModal({
             let months = processedData.length;
             if (timeFilter === '1Y') months = 12;
             if (timeFilter === '3Y') months = 36;
+            if (timeFilter === '7Y') months = 84;
             processedData = processedData.slice(0, months).reverse();
         }
         return processedData;
@@ -382,7 +391,7 @@ export default function TrendModal({
                 {/* Bottom Bar: Time Filters (Only for DATE_RANGE mode) */}
                 {filterType === 'DATE_RANGE' && (
                     <View className="flex-row justify-center gap-4">
-                        {['1Y', '3Y', 'ALL'].map((f) => (
+                        {availableFilters.map((f: any) => (
                             <TouchableOpacity
                                 key={f}
                                 onPress={() => setTimeFilter(f as any)}
@@ -390,7 +399,7 @@ export default function TrendModal({
                                 className={`px-4 py-2 rounded-lg border ${timeFilter === f ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/10'} ${(!isPremium) ? 'opacity-30' : ''}`}
                             >
                                 <Text className={`${timeFilter === f ? 'text-white' : 'text-slate-400'} font-bold text-xs`}>
-                                    {f === 'ALL' ? 'Tümü 👑' : f === '1Y' ? '1 Yıl' : '3 Yıl'}
+                                    {f === 'ALL' ? 'Tümü 👑' : f === '1Y' ? '1 Yıl' : f === '3Y' ? '3 Yıl' : '7 Yıl'}
                                 </Text>
                             </TouchableOpacity>
                         ))}

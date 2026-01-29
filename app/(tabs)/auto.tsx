@@ -1,8 +1,10 @@
 import { Skeleton } from '@/components/Skeleton';
+import TrendModal, { TrendDataPoint } from '@/components/TrendModal';
 import { AutoPageHeaderStats, AutoSalesHistoryItem, BrandAnalysis, FuelAnalysisResponse, getAutoPageHeader, getBrandAnalysis, getFuelAnalysis, getSalesHistory } from '@/lib/autoService';
-import { Calendar, ChevronDown, ChevronUp, Layers, TrendingDown, TrendingUp, Zap } from 'lucide-react-native';
+import { useAuth } from '@/providers/AuthProvider';
+import { Calendar, ChevronDown, ChevronUp, Layers, Maximize2, TrendingDown, TrendingUp, Zap } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Dimensions, Modal, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,18 +15,22 @@ export default function AutoScreen() {
     const [refreshing, setRefreshing] = useState(false);
 
     // Data States
+    const { isPremium, session } = useAuth();
     const [headerStats, setHeaderStats] = useState<AutoPageHeaderStats | null>(null);
     const [fuelAnalysis, setFuelAnalysis] = useState<FuelAnalysisResponse | null>(null);
     const [brandAnalysis, setBrandAnalysis] = useState<BrandAnalysis | null>(null);
     const [historyData, setHistoryData] = useState<AutoSalesHistoryItem[]>([]);
 
+    // Trend Modal State
+    const [trendModalVisible, setTrendModalVisible] = useState(false);
+    const [trendModalData, setTrendModalData] = useState<TrendDataPoint[]>([]);
+
     // Filter States
     const [fuelWarFilter, setFuelWarFilter] = useState<'MONTH' | 'YEAR'>('MONTH');
     const [fuelWarTab, setFuelWarTab] = useState<'FUEL' | 'BRAND'>('FUEL');
 
-    // Historical Trend Filter
+    // Historical Trend Filter (Inline)
     const [trendFilter, setTrendFilter] = useState<'1Y' | '7Y'>('1Y');
-    const [isTrendMaximized, setIsTrendMaximized] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -279,37 +285,39 @@ export default function AutoScreen() {
         );
     };
 
+    const handleOpenTrendModal = () => {
+        if (!historyData || historyData.length === 0) return;
+
+        // Propagate for TrendModal (Newest First = Descending)
+        const sortedDesc = [...historyData].sort((a, b) => new Date(b.reference_date).getTime() - new Date(a.reference_date).getTime());
+
+        const mapped: TrendDataPoint[] = sortedDesc.map(item => ({
+            label: new Date(item.reference_date).toLocaleString('tr-TR', { month: 'short', year: '2-digit' }),
+            value: item.quantity,
+            date: new Date(item.reference_date).toLocaleString('tr-TR', { month: 'long', year: 'numeric' })
+        }));
+
+        setTrendModalData(mapped);
+        setTrendModalVisible(true);
+    };
+
     return (
         <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
-            {/* Full Screen Modal */}
-            <Modal visible={isTrendMaximized} transparent={true} animationType="fade">
-                <View className="flex-1 bg-black/90 justify-center items-center">
-                    {/* Rotate Container for Landscape Simulation */}
-                    <View
-                        style={{
-                            width: Dimensions.get('window').height,
-                            height: Dimensions.get('window').width,
-                            transform: [{ rotate: '90deg' }],
-                            backgroundColor: '#0B1121',
-                            padding: 20
-                        }}
-                    >
-                        <View className="flex-row justify-between items-center mb-4">
-                            <Text className="text-white text-xl font-bold">Tarihsel Trend ({trendFilter})</Text>
-                            <TouchableOpacity onPress={() => setIsTrendMaximized(false)} className="bg-slate-800 p-2 rounded-lg">
-                                <Text className="text-white font-bold">Kapat ✕</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <View className="flex-1 justify-center pb-8">
-                            {/* Render Bigger Chart */}
-                            {renderChart(Dimensions.get('window').height - 100, Dimensions.get('window').width - 120)}
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+            {trendModalVisible && (
+                <TrendModal
+                    visible={true}
+                    onClose={() => setTrendModalVisible(false)}
+                    title="Otomobil Satış Trendi"
+                    data={trendModalData}
+                    isAuthenticated={!!session}
+                    isPremium={!!isPremium}
+                    filterType="DATE_RANGE"
+                    availableTimeFilters={['1Y', '7Y']}
+                    hideFilters={false}
+                />
+            )}
 
             <ScrollView
                 className="flex-1 px-5 pt-4"
@@ -642,8 +650,8 @@ export default function AutoScreen() {
                     <View className="flex-row justify-between items-center mb-6">
                         <View className="flex-row items-center gap-2">
                             <Text className="text-white text-lg font-bold">Tarihsel Trend</Text>
-                            <TouchableOpacity onPress={() => setIsTrendMaximized(true)} className="bg-slate-700/50 p-1.5 rounded-lg">
-                                <Text className="text-cyan-400 text-xs font-bold">⤢</Text>
+                            <TouchableOpacity onPress={handleOpenTrendModal} className="bg-slate-700/50 p-1.5 rounded-lg -mr-1 active:bg-slate-600">
+                                <Maximize2 size={12} color="#94a3b8" />
                             </TouchableOpacity>
                         </View>
 
