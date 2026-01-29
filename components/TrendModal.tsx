@@ -85,18 +85,47 @@ export default function TrendModal(props: TrendModalProps) {
         return found ? found.city_name : (selectedCity === 'TR' ? 'Türkiye Geneli' : selectedCity);
     }, [cityList, selectedCity]);
 
+    // Custom Close Handler to prevent flicker (Rotate THEN Close)
+    const handleClose = async () => {
+        try {
+            // 1. Force Portrait immediately while Modal is still up
+            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+            RNStatusBar.setHidden(false, 'slide');
+
+            // 2. Small delay to let the rotation animation/layout start behind the modal
+            setTimeout(() => {
+                onClose();
+            }, 150);
+        } catch (error) {
+            console.warn('Close orientation error:', error);
+            onClose();
+        }
+    };
+
     useEffect(() => {
-        const lockOrientation = async () => {
-            try {
-                await ScreenOrientation.unlockAsync();
-                await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-            } catch (error) {
-                console.warn('Orientation lock failed:', error);
+        const manageOrientation = async () => {
+            if (visible) {
+                try {
+                    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+                    RNStatusBar.setHidden(true, 'slide');
+                } catch (error) {
+                    console.warn('Orientation lock failed:', error);
+                }
+            }
+            // We do NOT automatically unlock here for 'else' case if we want to control it via handleClose
+            // BUT for safety (e.g. back button on Android handled by OS, or parent hiding it) we should keep it.
+            // If handleClose runs, this effect will run again after visible->false, which is fine (idempotent).
+            else {
+                try {
+                    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                    RNStatusBar.setHidden(false, 'slide');
+                } catch (error) {
+                    console.warn('Orientation unlock failed:', error);
+                }
             }
         };
 
-        RNStatusBar.setHidden(true, 'slide');
-        lockOrientation();
+        manageOrientation();
 
         return () => {
             const unlockOrientation = async () => {
@@ -104,12 +133,11 @@ export default function TrendModal(props: TrendModalProps) {
                     await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
                     RNStatusBar.setHidden(false, 'slide');
                 } catch (error) {
-                    console.warn('Orientation unlock failed:', error);
                 }
             };
             unlockOrientation();
         };
-    }, []);
+    }, [visible]);
 
     const filteredData = useMemo(() => {
         if (!data || data.length === 0) return [];
@@ -217,7 +245,7 @@ export default function TrendModal(props: TrendModalProps) {
             animationType="slide"
             presentationStyle="fullScreen"
             statusBarTranslucent={true}
-            onRequestClose={onClose}
+            onRequestClose={handleClose}
             supportedOrientations={['portrait', 'landscape']}
         >
             <StatusBar style="light" hidden={true} translucent />
@@ -360,7 +388,7 @@ export default function TrendModal(props: TrendModalProps) {
                         )}
                     </View>
 
-                    <TouchableOpacity onPress={onClose} className="bg-slate-800 p-2 rounded-full">
+                    <TouchableOpacity onPress={handleClose} className="bg-slate-800 p-2 rounded-full">
                         <X size={24} color="#cbd5e1" />
                     </TouchableOpacity>
                 </View>

@@ -305,19 +305,17 @@ export default function AutoScreen() {
         <SafeAreaView className="flex-1 bg-[#0B1121]" edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#0B1121" />
 
-            {trendModalVisible && (
-                <TrendModal
-                    visible={true}
-                    onClose={() => setTrendModalVisible(false)}
-                    title="Otomobil Satış Trendi"
-                    data={trendModalData}
-                    isAuthenticated={!!session}
-                    isPremium={!!isPremium}
-                    filterType="DATE_RANGE"
-                    availableTimeFilters={['1Y', '7Y']}
-                    hideFilters={false}
-                />
-            )}
+            <TrendModal
+                visible={trendModalVisible}
+                onClose={() => setTrendModalVisible(false)}
+                title="Otomobil Satış Trendi"
+                data={trendModalData}
+                isAuthenticated={!!session}
+                isPremium={!!isPremium}
+                filterType="DATE_RANGE"
+                availableTimeFilters={['1Y', '7Y']}
+                hideFilters={false}
+            />
 
             <ScrollView
                 className="flex-1 px-5 pt-4"
