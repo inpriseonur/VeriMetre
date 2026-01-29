@@ -13,6 +13,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 
 import { AuthProvider } from '@/providers/AuthProvider';
+import { MarketProvider } from '@/providers/MarketProvider';
 import { LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -32,17 +33,19 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <PushNotificationHandler />
-        <ThemeProvider value={DarkTheme}>
-          <Stack>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="login-modal" options={{ presentation: 'modal', headerShown: false }} />
-            <Stack.Screen name="profile-modal" options={{ presentation: 'modal', headerShown: false }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
+        <MarketProvider>
+          <PushNotificationHandler />
+          <ThemeProvider value={DarkTheme}>
+            <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              <Stack.Screen name="login-modal" options={{ presentation: 'modal', headerShown: false }} />
+              <Stack.Screen name="profile-modal" options={{ presentation: 'modal', headerShown: false }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </MarketProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

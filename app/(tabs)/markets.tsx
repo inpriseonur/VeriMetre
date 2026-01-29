@@ -1,12 +1,13 @@
 import { LivingStandardsChart } from '@/components/LivingStandardsChart';
 import { SalaryInputModal } from '@/components/SalaryInputModal';
-import { EconomicIndicators, fetchMarketData, getEconomicIndicators, getLastSalaryEntry, getLivingStandardsHistory, getUserPurchasingPower, MarketItem, upsertUserSalary } from '@/lib/marketService';
+import { getLastSalaryEntry, getLivingStandardsHistory, getUserPurchasingPower, upsertUserSalary } from '@/lib/marketService';
 import { useAuth } from '@/providers/AuthProvider';
+import { useMarket } from '@/providers/MarketProvider';
 import { ViewLivingStandards } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { ArrowLeftRight, Banknote, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import { default as React, useEffect, useState } from 'react';
 import {
     Alert,
     Dimensions,
@@ -38,34 +39,30 @@ const CURRENCIES = [
 type ChartMode = 'MIN_WAGE' | 'USER_SALARY';
 
 export default function MarketsScreen() {
+    const { marketData, indicators, refreshData: refreshContext, isLoading: isContextLoading } = useMarket();
     const { user, isGuest, isPremium } = useAuth();
     const router = useRouter();
     const navigation = useNavigation();
-    const [marketData, setMarketData] = useState<MarketItem[]>([]);
+
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [bottomPadding, setBottomPadding] = useState(40);
 
-    // Explicitly reset Header Right to remove any stale formatting (e.g. calculator icon)
     React.useLayoutEffect(() => {
         navigation.setOptions({
             headerRight: () => <HeaderProfileButton />,
         });
     }, [navigation]);
 
-    // Economic Indicators State
-    const [indicators, setIndicators] = useState<EconomicIndicators | null>(null);
     const [chartHistory, setChartHistory] = useState<ViewLivingStandards[]>([]);
     const [inflationSource, setInflationSource] = useState<'TÜİK' | 'ENAG' | 'İTO' | 'ORTALAMA'>('TÜİK');
 
-    // User Purchasing Power State
     const [userPurchasingPower, setUserPurchasingPower] = useState<any[]>([]);
     const [lastSalaryRecord, setLastSalaryRecord] = useState<{ amount: number, valid_from: string } | null>(null);
     const [chartMode, setChartMode] = useState<ChartMode>('MIN_WAGE');
     const [isSalaryModalVisible, setSalaryModalVisible] = useState(false);
     const [pendingSalaryData, setPendingSalaryData] = useState<{ amount: number, validFrom: string } | null>(null);
 
-    // Converter State
     const [amount, setAmount] = useState('1');
     const [selectedCurrencyId, setSelectedCurrencyId] = useState<number | null>(null);
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
@@ -76,14 +73,14 @@ export default function MarketsScreen() {
             'keyboardDidShow',
             () => {
                 setKeyboardVisible(true);
-                setBottomPadding(100); // Add extra padding when keyboard is open
+                setBottomPadding(100);
             }
         );
         const keyboardDidHideListener = Keyboard.addListener(
             'keyboardDidHide',
             () => {
                 setKeyboardVisible(false);
-                setBottomPadding(40); // Reset padding
+                setBottomPadding(40);
             }
         );
 
@@ -93,41 +90,14 @@ export default function MarketsScreen() {
         };
     }, []);
 
-    const loadData = async (silent = false) => {
-        if (!silent) setLoading(true);
-
-        const [mRes, iRes, hRes] = await Promise.all([
-            fetchMarketData(),
-            getEconomicIndicators(),
-            getLivingStandardsHistory(13)
-        ]);
-
-        if (mRes) {
-            setMarketData(mRes);
-            if (!selectedCurrencyId) {
-                const defaultCurr = mRes.find(item => item.id !== 4); // Assuming 4 is BIST
-                if (defaultCurr) setSelectedCurrencyId(defaultCurr.id);
-            }
+    useEffect(() => {
+        if (marketData.length > 0 && !selectedCurrencyId) {
+            const defaultCurr = marketData.find(item => item.id !== 4);
+            if (defaultCurr) setSelectedCurrencyId(defaultCurr.id);
         }
-
-        if (iRes) {
-            setIndicators(iRes);
-        }
-
-        if (hRes) {
-            setChartHistory(hRes);
-        }
-
-        if (user && !isGuest) {
-            loadUserPurchasingPower();
-        }
-
-        if (!silent) setLoading(false);
-        setRefreshing(false);
-    };
+    }, [marketData, selectedCurrencyId]);
 
     const loadUserPurchasingPower = async () => {
-        // Fetch both chart history AND exact last salary record
         const [chartData, lastRecord] = await Promise.all([
             getUserPurchasingPower(),
             getLastSalaryEntry()
@@ -137,26 +107,50 @@ export default function MarketsScreen() {
         setLastSalaryRecord(lastRecord);
     };
 
+    const loadData = async (silent = false) => {
+        if (!silent) setLoading(true);
+
+        const [hRes] = await Promise.all([
+            getLivingStandardsHistory(13)
+        ]);
+
+        if (hRes) {
+            setChartHistory(hRes);
+        }
+
+        if (user && !isGuest) {
+            loadUserPurchasingPower();
+        }
+
+        if (refreshing) {
+            await refreshContext(true);
+        }
+
+        if (!silent) setLoading(false);
+        setRefreshing(false);
+    };
+
+    const onRefresh = React.useCallback(async () => {
+        setRefreshing(true);
+        await refreshContext(true);
+        loadData(true);
+    }, [refreshContext]);
+
     useFocusEffect(
         React.useCallback(() => {
-            loadData();
+            loadData(true);
         }, [])
     );
 
-    // Load user data when switching to Salary mode or on User change
     useEffect(() => {
         if (user && !isGuest) {
             setChartMode('USER_SALARY');
             loadUserPurchasingPower();
         } else {
-            // User logged out or switched to guest -> Clear sensitive user data
             setUserPurchasingPower([]);
             setLastSalaryRecord(null);
         }
     }, [user, isGuest]);
-
-    // Header Right injection removed per UI request
-    // Calculator button moved to content body next to "ALIM GÜCÜ" header
 
     // Handle Auto-Save after Login
     useEffect(() => {
@@ -180,21 +174,18 @@ export default function MarketsScreen() {
     }, [user, isGuest, pendingSalaryData]);
 
     useEffect(() => {
-        // Auto-refresh every 60 seconds
         const interval = setInterval(() => {
-            loadData(true); // Silent refresh
+            loadData(true);
         }, 60000);
 
-        // Keyboard listeners for dynamic padding
         const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
-            setBottomPadding(280); // Increase space when keyboard opens
-            // Scroll to end to ensure input is visible
+            setBottomPadding(280);
             setTimeout(() => {
                 scrollViewRef.current?.scrollToEnd({ animated: true });
             }, 100);
         });
         const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-            setBottomPadding(40); // Reset space when keyboard closes (Smaller value)
+            setBottomPadding(40);
         });
 
         return () => {
@@ -204,33 +195,23 @@ export default function MarketsScreen() {
         };
     }, []);
 
-    const onRefresh = () => {
-        setRefreshing(true);
-        loadData();
-    };
-
     const handleUnlockPremium = () => {
         alert("Premium özelliği yakında!");
     };
 
     const handleSalarySuccess = (data: { amount: number, validFrom: string }) => {
-        // If user is guest (or not cached yet) and passes an amount, it means they clicked save.
         if ((!user || isGuest) && data) {
-            // Guest Flow: Store state and prompt login
             setPendingSalaryData(data);
             setSalaryModalVisible(false);
             router.push('/login-modal');
         } else {
-            // Logged In Flow
             loadUserPurchasingPower();
             setChartMode('USER_SALARY');
         }
     };
 
-    // Derived Data
     const gridItems = marketData;
 
-    // Helper for Inflation Value based on Source
     const getInflationValue = () => {
         if (!indicators) return 0;
         let val = 0;
@@ -243,7 +224,6 @@ export default function MarketsScreen() {
         return val ?? 0;
     };
 
-    // Cycle Inflation Source
     const cycleInflationSource = () => {
         if (inflationSource === 'TÜİK') setInflationSource('ENAG');
         else if (inflationSource === 'ENAG') setInflationSource('İTO');

@@ -16,11 +16,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import CreatePortfolioModal from '@/components/portfolio/CreatePortfolioModal';
-import { PortfolioSummary, getPortfolios } from '@/lib/portfolioService';
+import { createPortfolio, getPortfolios, PortfolioSummary } from '@/lib/portfolioService';
 import { useAuth } from '@/providers/AuthProvider';
+import { Alert } from 'react-native';
 
 export default function PortfolioScreen() {
-    const { resetKey, user } = useAuth(); // Watch for logout events & user state
+    const { resetKey, user, isGuest } = useAuth(); // Watch for logout & user state
     const [portfolios, setPortfolios] = useState<PortfolioSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -28,7 +29,10 @@ export default function PortfolioScreen() {
     const [totalBalance, setTotalBalance] = useState(0);
     const [modalVisible, setModalVisible] = useState(false);
 
-    // Clear data when user logs out (user becomes null) or resetKey changes
+    // Guest pending state
+    const [pendingPortfolio, setPendingPortfolio] = useState<{ name: string, type: string, initialPrincipal: number } | null>(null);
+
+    // Clear data when user logs out
     useEffect(() => {
         if (!user) {
             setPortfolios([]);
@@ -39,6 +43,24 @@ export default function PortfolioScreen() {
         }
     }, [user, resetKey]);
 
+    // Auto-Save Effect (Guest -> User)
+    useEffect(() => {
+        const autoSave = async () => {
+            if (user && !isGuest && pendingPortfolio) {
+                console.log("Auto-saving pending portfolio:", pendingPortfolio);
+                try {
+                    await createPortfolio(pendingPortfolio.name, pendingPortfolio.type, pendingPortfolio.initialPrincipal);
+                    setPendingPortfolio(null);
+                    Alert.alert("Başarılı", "Giriş yapıldı, portföyünüz oluşturuldu! 🎉");
+                    loadData();
+                } catch (err: any) {
+                    Alert.alert("Hata", "Otomatik kaydetme başarısız: " + err.message);
+                }
+            }
+        };
+        autoSave();
+    }, [user, isGuest, pendingPortfolio]);
+
     // Initial Load & Focus Effect -> Only if user exists
     useFocusEffect(
         useCallback(() => {
@@ -47,7 +69,12 @@ export default function PortfolioScreen() {
     );
 
     const loadData = async () => {
-        if (!user) return; // Guard: Don't fetch if no user
+        // If guest, maybe we show empty or demo? For now guard.
+        if (!user && !isGuest) return;
+        if (isGuest) {
+            setLoading(false);
+            return;
+        }
 
         try {
             setLoading(true);
@@ -63,6 +90,21 @@ export default function PortfolioScreen() {
             setLoading(false);
             setRefreshing(false);
         }
+    };
+
+    const handleCreatePortfolio = async (data: { name: string, type: string, initialPrincipal: number }) => {
+        if (!user || isGuest) {
+            // Guest Flow
+            setPendingPortfolio(data);
+            setModalVisible(false);
+
+            router.push('/login-modal');
+            return;
+        }
+
+        // User Flow
+        await createPortfolio(data.name, data.type, data.initialPrincipal);
+        loadData();
     };
 
     const onRefresh = async () => {
@@ -184,9 +226,7 @@ export default function PortfolioScreen() {
             <CreatePortfolioModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
-                onCreated={() => {
-                    loadData();
-                }}
+                onSubmit={handleCreatePortfolio}
             />
         </SafeAreaView>
     );

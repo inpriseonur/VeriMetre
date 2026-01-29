@@ -11,15 +11,13 @@ import {
     View
 } from 'react-native';
 
-import { createPortfolio } from '@/lib/portfolioService';
-
 interface CreatePortfolioModalProps {
     visible: boolean;
     onClose: () => void;
-    onCreated: () => void;
+    onSubmit: (data: { name: string; type: string; initialPrincipal: number }) => Promise<void>;
 }
 
-export default function CreatePortfolioModal({ visible, onClose, onCreated }: CreatePortfolioModalProps) {
+export default function CreatePortfolioModal({ visible, onClose, onSubmit }: CreatePortfolioModalProps) {
     const [name, setName] = useState('');
     const [initialPrincipal, setInitialPrincipal] = useState('');
     const [loading, setLoading] = useState(false);
@@ -38,12 +36,11 @@ export default function CreatePortfolioModal({ visible, onClose, onCreated }: Cr
             // Parse principal (handle Turkish comma)
             const principal = initialPrincipal ? parseFloat(initialPrincipal.replace(',', '.')) : 0;
 
-            await createPortfolio(name, type, isNaN(principal) ? 0 : principal);
+            await onSubmit({ name, type, initialPrincipal: isNaN(principal) ? 0 : principal });
 
             // Success
             setName('');
             setInitialPrincipal('');
-            onCreated();
             onClose();
         } catch (error: any) {
             console.error(error);

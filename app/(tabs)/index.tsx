@@ -3,8 +3,8 @@ import InflationChart from '@/components/InflationChart';
 import { AutoSummary, getAutoSummary } from '@/lib/autoService';
 import { getHousingSummary, HousingSummary } from '@/lib/housingService';
 import { getTuikSummary, TuikSummary } from '@/lib/inflationService';
-import { fetchMarketData, MarketItem } from '@/lib/marketService';
 import { supabase } from '@/lib/supabase';
+import { useMarket } from '@/providers/MarketProvider';
 import { ViewInflationCalculated, ViewLivingStandards } from '@/types/database';
 import { ArrowUpRight, BarChart3, Building2, Car, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -12,13 +12,13 @@ import { ActivityIndicator, RefreshControl, ScrollView, StatusBar, Text, View } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
+  const { marketData, refreshData: refreshMarketData, isLoading: isMarketLoading } = useMarket();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [inflationData, setInflationData] = useState<ViewInflationCalculated[]>([]);
   // Living standards data logic kept but not used in UI as per design request - kept for future use if needed
   const [livingStandardsData, setLivingStandardsData] = useState<ViewLivingStandards[]>([]);
 
-  const [marketData, setMarketData] = useState<MarketItem[]>([]);
   const [inflationSummary, setInflationSummary] = useState<TuikSummary | null>(null);
   const [housingSummary, setHousingSummary] = useState<HousingSummary | null>(null);
   const [autoSummary, setAutoSummary] = useState<AutoSummary | null>(null);
@@ -31,7 +31,7 @@ export default function DashboardScreen() {
     try {
       setLoading(true);
 
-      const [inflationRes, livingStandardsRes, marketRes, tuikRes, housingRes, autoRes] = await Promise.all([
+      const [inflationRes, livingStandardsRes, tuikRes, housingRes, autoRes] = await Promise.all([
         supabase
           .from('view_inflation_calculated')
           .select('*')
@@ -42,7 +42,7 @@ export default function DashboardScreen() {
           .select('*')
           .order('reference_date', { ascending: false })
           .limit(24),
-        fetchMarketData(),
+        // fetchMarketData() removed - using Context
         getTuikSummary(),
         getHousingSummary(),
         getAutoSummary()
@@ -61,9 +61,7 @@ export default function DashboardScreen() {
         setLivingStandardsData(livingStandardsRes.data || []);
       }
 
-      if (marketRes) {
-        setMarketData(marketRes);
-      }
+      // Market Data handling removed
 
       if (tuikRes && tuikRes.data) {
         setInflationSummary(tuikRes.data);
@@ -86,8 +84,9 @@ export default function DashboardScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchData();
-  }, []);
+    refreshMarketData(true); // Refresh context data silently (or not)
+    fetchData(); // Refresh local data
+  }, [refreshMarketData]);
 
   // Format Time for "Son Güncelleme"
   const now = new Date();

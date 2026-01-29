@@ -854,29 +854,27 @@ export default function RealEstateScreen() {
                             ) : (
                                 <>
                                     <View className="flex-row justify-between items-start mb-2">
-                                        <View className="flex-row items-center gap-2">
-                                            <Text className="text-white font-bold text-base">Yeni Konut İzni</Text>
-                                            <TouchableOpacity
-                                                onPress={handleOpenTrendAnalysis}
-                                                className="bg-slate-700/50 p-1.5 rounded-lg active:bg-slate-600"
-                                            >
-                                                <Maximize2 size={12} color="#94a3b8" />
-                                            </TouchableOpacity>
-                                        </View>
-                                        <Text className="text-slate-500 text-[10px]">
-                                            {(() => {
-                                                if (!supplyStats.permits.reference_date) return '';
-                                                const d = new Date(supplyStats.permits.reference_date);
-                                                // Eyl '25 format
-                                                const month = d.toLocaleString('tr-TR', { month: 'short' });
-                                                const year = d.getFullYear().toString().slice(2);
-                                                return `${month} '${year}`;
-                                            })()}
-                                        </Text>
+                                        <Text className="text-white font-bold text-base">Yeni Konut İzni</Text>
+                                        <TouchableOpacity
+                                            onPress={handleOpenTrendAnalysis}
+                                            className="bg-slate-700/50 p-1.5 rounded-lg -mr-1 -mt-1 active:bg-slate-600"
+                                        >
+                                            <Maximize2 size={12} color="#94a3b8" />
+                                        </TouchableOpacity>
                                     </View>
 
                                     <View className="mt-2 flex-row justify-between items-start">
                                         <View>
+                                            <Text className="text-slate-500 text-[10px] mb-0.5 font-medium uppercase">
+                                                {(() => {
+                                                    if (!supplyStats.permits.reference_date) return '';
+                                                    const d = new Date(supplyStats.permits.reference_date);
+                                                    // Eyl '25 format
+                                                    const month = d.toLocaleString('tr-TR', { month: 'short' });
+                                                    const year = d.getFullYear().toString().slice(2);
+                                                    return `${month} '${year}`;
+                                                })()}
+                                            </Text>
                                             <Text className="text-white text-4xl font-extrabold tracking-tight">
                                                 {formatNumber(supplyStats.permits.total_units)}
                                             </Text>
