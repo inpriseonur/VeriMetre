@@ -875,7 +875,7 @@ export default function RealEstateScreen() {
                                         </Text>
                                     </View>
 
-                                    <View className="mt-4 flex-row justify-between items-start">
+                                    <View className="mt-2 flex-row justify-between items-start">
                                         <View>
                                             <Text className="text-white text-4xl font-extrabold tracking-tight">
                                                 {formatNumber(supplyStats.permits.total_units)}

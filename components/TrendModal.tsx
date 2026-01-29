@@ -142,7 +142,7 @@ export default function TrendModal({
         pointerStripUptoDataPoint: true,
         pointerStripColor: 'rgba(255,255,255,0.2)',
         pointerStripWidth: 2,
-        strokeDashArray: [2, 5],
+        strokeDashArray: [5, 5],
         pointerColor: 'white',
         radius: 4,
         pointerLabelWidth: 100,

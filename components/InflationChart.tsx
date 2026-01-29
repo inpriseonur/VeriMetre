@@ -80,7 +80,7 @@ export default function InflationChart({ data, loading }: InflationChartProps) {
         pointerStripUptoDataPoint: true,
         pointerStripColor: 'lightgray',
         pointerStripWidth: 2,
-        strokeDashArray: [2, 5],
+        strokeDashArray: [5, 5],
         pointerColor: 'lightgray',
         radius: 4,
         pointerLabelWidth: 100,
