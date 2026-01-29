@@ -30,7 +30,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.onur.verimatikapp"
+      "package": "com.onur.verimatikapp",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -58,6 +59,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6dbacf9b-8fee-4d2b-8bcd-fba3fdce0f8a"
+      }
     }
   }
 }

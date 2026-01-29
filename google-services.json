@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "336549854875",
+    "project_id": "verimatikapp",
+    "storage_bucket": "verimatikapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336549854875:android:9f7339d413040faaea103e",
+        "android_client_info": {
+          "package_name": "com.onur.verimatikapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9Ssp2FLU1sWIfXjGBEUc55cl1trtJrvg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

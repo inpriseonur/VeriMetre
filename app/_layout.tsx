@@ -12,6 +12,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 // };
 
 
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { MarketProvider } from '@/providers/MarketProvider';
 import { LogBox } from 'react-native';
@@ -25,6 +26,9 @@ LogBox.ignoreLogs(['Unable to activate keep awake']);
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
+  // Call immediately at top level
+  usePushNotifications();
+
   useEffect(() => {
     // Lock to portrait by default
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -34,7 +38,6 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <MarketProvider>
-          <PushNotificationHandler />
           <ThemeProvider value={DarkTheme}>
             <Stack>
               <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -49,12 +52,4 @@ export default function RootLayout() {
       </AuthProvider>
     </GestureHandlerRootView>
   );
-}
-
-// Helper component to use hook inside AuthProvider
-import { usePushNotifications } from '@/hooks/usePushNotifications';
-
-function PushNotificationHandler() {
-  usePushNotifications();
-  return null;
 }

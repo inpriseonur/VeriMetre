@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 // Configure how notifications should handle when app is in foreground
 Notifications.setNotificationHandler({
@@ -46,13 +46,20 @@ async function registerForPushNotificationsAsync() {
         // Get the Expo Push Token
         // We use the projectId from app config if available
         try {
-            const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-            token = (await Notifications.getExpoPushTokenAsync({
+            const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.expoConfig?.slug;
+            const tokenResponse = await Notifications.getExpoPushTokenAsync({
                 projectId,
-            })).data;
-            console.log('Expo Push Token generated:', token);
+            });
+            token = tokenResponse.data;
+
+            console.log("🚀 ~~~ PUSH TOKEN ~~~ 🚀");
+            console.log(token);
+            console.log("🚀 ~~~~~~~~~~~~~~~~~~~~ 🚀");
+
+            Alert.alert("Token", token);
         } catch (e) {
             console.error('Error fetching push token', e);
+            Alert.alert("Error fetching push token", String(e));
         }
     } else {
         console.log('Must use physical device for Push Notifications');
@@ -71,13 +78,12 @@ export function usePushNotifications() {
     const { session } = useAuth();
 
     useEffect(() => {
-        // Only register if user is logged in
-        if (!session?.user) return;
+        console.log("🚀 Token Alma İşlemi Başladı (Session Bağımsız)");
 
         registerForPushNotificationsAsync().then(async (token) => {
             setExpoPushToken(token);
 
-            if (token && session.user.id) {
+            if (token && session?.user?.id) {
                 // Save token to Supabase
                 try {
                     const { error } = await supabase
@@ -116,7 +122,7 @@ export function usePushNotifications() {
                 responseListener.current.remove();
             }
         };
-    }, [session]);
+    }, []);
 
     return {
         expoPushToken,
