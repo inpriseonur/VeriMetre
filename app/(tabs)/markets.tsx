@@ -1,12 +1,12 @@
 import { LivingStandardsChart } from '@/components/LivingStandardsChart';
 import { SalaryInputModal } from '@/components/SalaryInputModal';
-import { getLastSalaryEntry, getLivingStandardsHistory, getUserPurchasingPower, upsertUserSalary } from '@/lib/marketService';
+import { getLastSalaryEntry, getLatestInflationRates, getLivingStandardsHistory, getUserPurchasingPower, upsertUserSalary } from '@/lib/marketService';
 import { useAuth } from '@/providers/AuthProvider';
 import { useMarket } from '@/providers/MarketProvider';
 import { ViewLivingStandards } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { ArrowLeftRight, Banknote, Bitcoin, Calculator, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { ArrowLeftRight, Banknote, Calculator, Coins, DollarSign, Euro, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { default as React, useEffect, useState } from 'react';
 import {
     Alert,
@@ -480,66 +480,12 @@ export default function MarketsScreen() {
                                 })}
                             </View>
 
-                            {/* --- Converter --- */}
-                            {selectedCurrencyId && (
-                                <View className="bg-[#151C2F] p-4 rounded-2xl border border-white/10 mb-8">
-                                    <View className="flex-row items-center gap-2 mb-4">
-                                        <Calculator size={20} color="#3b82f6" />
-                                        <Text className="text-white font-bold text-lg">Hızlı Çevirici</Text>
-                                    </View>
+                            {/* --- Enhanced Quick Converter --- */}
+                            <QuickConverterTool
+                                marketData={marketData}
+                                defaultCurrencyId={selectedCurrencyId}
+                            />
 
-                                    <View className="flex-row items-center gap-3">
-                                        {/* Amount Input */}
-                                        <View className="flex-1 bg-slate-800/50 rounded-xl px-4 py-3 border border-white/5">
-                                            <Text className="text-slate-400 text-xs mb-1">Miktar</Text>
-                                            <TextInput
-                                                value={amount}
-                                                onChangeText={setAmount}
-                                                keyboardType="numeric"
-                                                className="text-white font-bold text-lg h-8 p-0"
-                                                placeholder="0"
-                                                placeholderTextColor="#64748b"
-                                            />
-                                        </View>
-
-                                        {/* Currency Select */}
-                                        <ScrollView horizontal className="max-w-[160px]" showsHorizontalScrollIndicator={false}>
-                                            {marketData.filter(m => m.id !== 4).map(curr => {
-                                                let Icon = Banknote;
-                                                const s = curr.symbol.toUpperCase();
-                                                if (s.includes('USD')) Icon = DollarSign;
-                                                else if (s.includes('EUR')) Icon = Euro;
-                                                else if (s.includes('ALTIN') || s.includes('GLD') || s === 'GA') Icon = Coins;
-                                                else if (s.includes('BTC') || s.includes('BITCOIN')) Icon = Bitcoin;
-
-                                                const isSelected = selectedCurrencyId === curr.id;
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={curr.id}
-                                                        onPress={() => setSelectedCurrencyId(curr.id)}
-                                                        className={`mr-2 w-10 h-10 items-center justify-center rounded-xl border ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/10'}`}
-                                                    >
-                                                        <Icon size={20} color={isSelected ? 'white' : '#94a3b8'} />
-                                                    </TouchableOpacity>
-                                                );
-                                            })}
-                                        </ScrollView>
-                                    </View>
-
-                                    {/* Arrow */}
-                                    <View className="items-center -my-2 z-10 relative top-2">
-                                        <View className="bg-slate-700 p-1.5 rounded-full border border-[#151C2F]">
-                                            <ArrowLeftRight size={16} color="#94a3b8" />
-                                        </View>
-                                    </View>
-
-                                    {/* Result */}
-                                    <View className="mt-2 bg-slate-900/50 rounded-xl px-4 py-4 border border-white/5 items-center">
-                                        <Text className="text-slate-400 text-xs mb-1">Türk Lirası Karşılığı</Text>
-                                        <Text className="text-white font-bold text-2xl">{getConverterResult()} ₺</Text>
-                                    </View>
-                                </View>
-                            )}
                         </>
                     )}
                 </ScrollView>
@@ -555,5 +501,246 @@ export default function MarketsScreen() {
                 lastSalaryDate={lastSalaryRecord?.valid_from}
             />
         </SafeAreaView>
+    );
+}
+
+function QuickConverterTool({ marketData, defaultCurrencyId }: { marketData: any[], defaultCurrencyId: number | null }) {
+    const [mode, setMode] = useState<'CURRENCY' | 'RENT'>('CURRENCY');
+
+    // Mode 1: Currency
+    const [amountAsset, setAmountAsset] = useState('1'); // Amount in Foreign Currency/Gold
+    const [amountTL, setAmountTL] = useState(''); // Amount in TL
+    const [selectedCurrId, setSelectedCurrId] = useState<number | null>(defaultCurrencyId);
+
+    // Mode 2: Rent
+    const [currentRent, setCurrentRent] = useState('');
+    const [rentSource, setRentSource] = useState<'TÜİK' | 'ENAG' | 'İTO' | 'ORTALAMA'>('ORTALAMA');
+    const [inflationRates, setInflationRates] = useState<{ tuik: number, enag: number, ito: number }>({ tuik: 0, enag: 0, ito: 0 });
+
+    useEffect(() => {
+        if (!selectedCurrId && defaultCurrencyId) setSelectedCurrId(defaultCurrencyId);
+    }, [defaultCurrencyId]);
+
+    // Fetch inflation rates when entering Rent mode
+    useEffect(() => {
+        if (mode === 'RENT') {
+            getLatestInflationRates().then(rates => setInflationRates(rates));
+        }
+    }, [mode]);
+
+    // Format Number Helper
+    const formatNumber = (num: string) => {
+        // Remove non-numeric except dot/comma
+        let val = num.replace(/[^0-9.,]/g, '');
+        return val;
+    };
+
+    const formatDisplay = (val: number) => {
+        return val.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+    };
+
+    // --- Currency Logic ---
+    const handleAssetChange = (text: string) => {
+        setAmountAsset(text);
+        if (!selectedCurrId) return;
+        const item = marketData.find(m => m.id === selectedCurrId);
+        if (!item) return;
+
+        const val = parseFloat(text.replace('.', '').replace(',', '.')) || 0;
+        const tlVal = val * item.price;
+        setAmountTL(tlVal > 0 ? formatDisplay(tlVal) : '');
+    };
+
+    const handleTLChange = (text: string) => {
+        setAmountTL(text);
+        if (!selectedCurrId) return;
+        const item = marketData.find(m => m.id === selectedCurrId);
+        if (!item) return;
+
+        const val = parseFloat(text.replace('.', '').replace(',', '.')) || 0;
+        const assetVal = val / item.price;
+        setAmountAsset(assetVal > 0 ? formatDisplay(assetVal) : '');
+    };
+
+    const handleCurrencySelect = (id: number) => {
+        setSelectedCurrId(id);
+        // Recalculate TL based on current Asset amount
+        const item = marketData.find(m => m.id === id);
+        if (!item) return;
+        const val = parseFloat(amountAsset.replace('.', '').replace(',', '.')) || 0;
+        const tlVal = val * item.price;
+        setAmountTL(tlVal > 0 ? formatDisplay(tlVal) : '');
+    };
+
+    // --- Rent Logic ---
+    const getRentRate = () => {
+        switch (rentSource) {
+            case 'TÜİK': return inflationRates.tuik;
+            case 'ENAG': return inflationRates.enag;
+            case 'İTO': return inflationRates.ito;
+            case 'ORTALAMA': return (inflationRates.tuik + inflationRates.enag + inflationRates.ito) / 3;
+            default: return 0;
+        }
+    };
+
+    const calculateNewRent = () => {
+        const rent = parseFloat(currentRent.replace('.', '').replace(',', '.')) || 0;
+        const rate = getRentRate();
+        const increase = rent * (rate / 100);
+        return rent + increase;
+    };
+
+    const handleSwap = () => {
+        // Swap logic: Take the value from TL input and put it into Asset input
+        // This effectively asks: "What is X TL worth in this Asset?" -> conversion 
+        // But visually swapping numbers: 
+        // User typed 100 USD (= 3200 TL). Swap -> 3200 USD (= X TL).
+        // This is usually what "swap inputs" means in this UI layout.
+        handleAssetChange(amountTL);
+    };
+
+    // Filter Currencies (USD, EUR, GLD)
+    // Exclude BTC specifically
+    const filteredCurrencies = marketData.filter(m => {
+        const s = m.symbol.toUpperCase();
+        return (s.includes('USD') || s.includes('EUR') || s.includes('GLD') || s === 'GA' || m.name.toUpperCase().includes('GRAM ALTIN'))
+            && !s.includes('BTC') && !m.name.toUpperCase().includes('BITCOIN');
+    });
+
+    return (
+        <View className="bg-[#151C2F] p-4 rounded-2xl border border-white/10 mb-8 overflow-hidden">
+            {/* Header with Mode Toggle */}
+            <View className="flex-row items-center justify-between mb-4">
+                <View className="flex-row items-center gap-2">
+                    <Calculator size={20} color="#3b82f6" />
+                    <Text className="text-white font-bold text-lg">Hesaplayıcı</Text>
+                </View>
+
+                <View className="flex-row bg-slate-900 rounded-lg p-0.5 border border-white/5">
+                    <TouchableOpacity
+                        onPress={() => setMode('CURRENCY')}
+                        className={`px-3 py-1.5 rounded-md ${mode === 'CURRENCY' ? 'bg-slate-700' : 'transparent'}`}
+                    >
+                        <Text className={`text-[10px] font-bold ${mode === 'CURRENCY' ? 'text-white' : 'text-slate-500'}`}>DÖVİZ</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setMode('RENT')}
+                        className={`px-3 py-1.5 rounded-md ${mode === 'RENT' ? 'bg-slate-700' : 'transparent'}`}
+                    >
+                        <Text className={`text-[10px] font-bold ${mode === 'RENT' ? 'text-white' : 'text-slate-500'}`}>KİRA</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {mode === 'CURRENCY' ? (
+                <>
+                    {/* Mode 1: Currency Converter */}
+                    <View className="flex-row items-center mb-4">
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {filteredCurrencies.map(curr => {
+                                let Icon = Banknote;
+                                const s = curr.symbol.toUpperCase();
+                                if (s.includes('USD')) Icon = DollarSign;
+                                else if (s.includes('EUR')) Icon = Euro;
+                                else if (s.includes('ALTIN') || s.includes('GLD') || s === 'GA') Icon = Coins;
+
+                                const isSelected = selectedCurrId === curr.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={curr.id}
+                                        onPress={() => handleCurrencySelect(curr.id)}
+                                        className={`mr-2 w-10 h-10 items-center justify-center rounded-xl border ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/10'}`}
+                                    >
+                                        <Icon size={20} color={isSelected ? 'white' : '#94a3b8'} />
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+
+                    <View className="flex-row items-center gap-3 mb-4">
+                        {/* Asset Input */}
+                        <View className="flex-1 bg-slate-800/50 rounded-xl px-3 py-2 border border-white/5">
+                            <Text className="text-slate-400 text-[10px] mb-1 font-bold tracking-wider">
+                                {filteredCurrencies.find(c => c.id === selectedCurrId)?.symbol || 'VARLIK'}
+                            </Text>
+                            <TextInput
+                                value={amountAsset}
+                                onChangeText={handleAssetChange}
+                                keyboardType="numeric"
+                                className="text-white font-bold text-lg h-8 p-0"
+                                placeholder="0"
+                                placeholderTextColor="#64748b"
+                            />
+                        </View>
+
+                        <TouchableOpacity onPress={handleSwap} className="p-2">
+                            <ArrowLeftRight size={16} color="#475569" />
+                        </TouchableOpacity>
+
+                        {/* TL Input */}
+                        <View className="flex-1 bg-slate-800/50 rounded-xl px-3 py-2 border border-white/5">
+                            <Text className="text-slate-400 text-[10px] mb-1 font-bold tracking-wider">TL</Text>
+                            <TextInput
+                                value={amountTL}
+                                onChangeText={handleTLChange}
+                                keyboardType="numeric"
+                                className="text-white font-bold text-lg h-8 p-0"
+                                placeholder="0"
+                                placeholderTextColor="#64748b"
+                            />
+                        </View>
+                    </View>
+
+                    <View className="items-center">
+                        <Text className="text-slate-500 text-[10px]">
+                            1 {filteredCurrencies.find(c => c.id === selectedCurrId)?.symbol} = {filteredCurrencies.find(c => c.id === selectedCurrId)?.price.toFixed(2)} ₺
+                        </Text>
+                    </View>
+                </>
+            ) : (
+                <>
+                    {/* Mode 2: Rent Calculator */}
+                    <View className="mb-4">
+                        <Text className="text-slate-400 text-xs mb-2 font-bold">Hesaplama Oranı</Text>
+                        <View className="flex-row bg-slate-800 rounded-lg p-1 border border-white/5 flex-wrap">
+                            {['TÜİK', 'ENAG', 'İTO', 'ORTALAMA'].map((opt) => (
+                                <TouchableOpacity
+                                    key={opt}
+                                    onPress={() => setRentSource(opt as any)}
+                                    className={`flex-1 items-center py-1.5 rounded-md ${rentSource === opt ? 'bg-blue-600' : 'transparent'}`}
+                                >
+                                    <Text className={`text-[10px] font-bold ${rentSource === opt ? 'text-white' : 'text-slate-400'}`}>{opt}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+
+                    <View className="bg-slate-800/50 rounded-xl px-4 py-3 border border-white/5 mb-4">
+                        <Text className="text-slate-400 text-xs mb-1 font-bold">Mevcut Kira Tutarı</Text>
+                        <TextInput
+                            value={currentRent}
+                            onChangeText={setCurrentRent}
+                            keyboardType="numeric"
+                            className="text-white font-bold text-xl h-8 p-0"
+                            placeholder="0"
+                            placeholderTextColor="#64748b"
+                        />
+                    </View>
+
+                    <View className="bg-slate-900/80 rounded-xl p-4 border border-white/10">
+                        <View className="flex-row justify-between mb-2">
+                            <Text className="text-slate-400 text-xs">Kullanılan Artış Oranı</Text>
+                            <Text className="text-blue-400 text-xs font-bold">%{getRentRate().toFixed(2)}</Text>
+                        </View>
+                        <View className="h-[1px] bg-white/5 my-2" />
+                        <View className="flex-row justify-between items-center">
+                            <Text className="text-slate-300 text-sm font-bold">Yeni Kira</Text>
+                            <Text className="text-white text-2xl font-bold">{formatDisplay(calculateNewRent())} ₺</Text>
+                        </View>
+                    </View>
+                </>
+            )}
+        </View>
     );
 }

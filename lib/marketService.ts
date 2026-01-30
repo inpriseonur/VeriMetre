@@ -213,6 +213,49 @@ export const getLivingStandardsHistory = async (limit: number = 13): Promise<Vie
     }
 };
 
+// --- Rent Calculator Helper ---
+export interface LatestInflationRates {
+    tuik: number;
+    enag: number;
+    ito: number;
+}
+
+export const getLatestInflationRates = async (): Promise<LatestInflationRates> => {
+    try {
+        // Fetch latest yearly rate for each source from view_inflation_calculated
+        const { data, error } = await supabase
+            .from('view_inflation_calculated')
+            .select('source_id, calculated_yearly_rate')
+            .in('source_id', [1, 2, 3]) // 1: ENAG, 2: TUIK, 3: ITO (Assuming IDs based on previous code)
+            .order('reference_date', { ascending: false });
+
+        if (error) {
+            console.error('getLatestInflationRates error:', error);
+            return { tuik: 0, enag: 0, ito: 0 };
+        }
+
+        // We might get multiple rows per source, we only want the absolute latest one for each.
+        // Since we ordered by reference_date desc, the first occurrence of each source_id is the latest.
+        const rates: LatestInflationRates = { tuik: 0, enag: 0, ito: 0 };
+        const found = { 1: false, 2: false, 3: false };
+
+        for (const row of data || []) {
+            if (!found[row.source_id as 1 | 2 | 3]) {
+                if (row.source_id === 1) rates.enag = row.calculated_yearly_rate;
+                else if (row.source_id === 2) rates.tuik = row.calculated_yearly_rate;
+                else if (row.source_id === 3) rates.ito = row.calculated_yearly_rate;
+                found[row.source_id as 1 | 2 | 3] = true;
+            }
+        }
+
+        return rates;
+
+    } catch (err) {
+        console.error('getLatestInflationRates exception:', err);
+        return { tuik: 0, enag: 0, ito: 0 };
+    }
+};
+
 // --- Personal Purchasing Power Module ---
 
 export interface UserPurchasingPower {
