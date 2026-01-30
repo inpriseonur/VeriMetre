@@ -213,6 +213,9 @@ export default function TrendModal(props: TrendModalProps) {
     }), []);
 
     const chartWidth = SCREEN_WIDTH - 80;
+    // Locked state helper
+    const isLocked = !isAuthenticated || !isPremium;
+
     const renderChart = () => (
         <View style={{ alignItems: 'center', width: '100%' }}>
             <LineChart
@@ -282,13 +285,15 @@ export default function TrendModal(props: TrendModalProps) {
                                 <View className="flex-row bg-slate-900 p-1 rounded-lg">
                                     <TouchableOpacity
                                         onPress={() => onPeriodChange && onPeriodChange('monthly')}
-                                        className={`px-3 py-1 rounded-md ${selectedPeriod === 'monthly' ? 'bg-blue-600' : ''}`}
+                                        disabled={isLocked}
+                                        className={`px-3 py-1 rounded-md ${selectedPeriod === 'monthly' ? 'bg-blue-600' : ''} ${isLocked ? 'opacity-50' : ''}`}
                                     >
                                         <Text className={`text-xs ${selectedPeriod === 'monthly' ? 'text-white font-bold' : 'text-slate-400'}`}>Aylık</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         onPress={() => onPeriodChange && onPeriodChange('yearly')}
-                                        className={`px-3 py-1 rounded-md ${selectedPeriod === 'yearly' ? 'bg-blue-600' : ''}`}
+                                        disabled={isLocked}
+                                        className={`px-3 py-1 rounded-md ${selectedPeriod === 'yearly' ? 'bg-blue-600' : ''} ${isLocked ? 'opacity-50' : ''}`}
                                     >
                                         <Text className={`text-xs ${selectedPeriod === 'yearly' ? 'text-white font-bold' : 'text-slate-400'}`}>Yıllık</Text>
                                     </TouchableOpacity>
@@ -298,7 +303,8 @@ export default function TrendModal(props: TrendModalProps) {
                                     <>
                                         <TouchableOpacity
                                             onPress={() => setCitySelectorVisible(true)}
-                                            className="flex-row items-center bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-lg gap-2"
+                                            disabled={isLocked}
+                                            className={`flex-row items-center bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-lg gap-2 ${isLocked ? 'opacity-50' : ''}`}
                                         >
                                             <Text className="text-white text-xs font-bold">{selectedCityName}</Text>
                                             <ChevronDown size={14} color="#94a3b8" />
@@ -398,7 +404,7 @@ export default function TrendModal(props: TrendModalProps) {
                     {renderChart()}
 
                     {/* Overlay Logic */}
-                    {(!isAuthenticated || !isPremium) && (
+                    {(isLocked) && (
                         <BlurView intensity={100} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 24, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden' }]}>
                             <View className="bg-black/60 p-6 rounded-2xl items-center border border-white/10 w-[60%]">
                                 <View className="bg-yellow-500/20 p-4 rounded-full mb-4">
@@ -423,8 +429,8 @@ export default function TrendModal(props: TrendModalProps) {
                             <TouchableOpacity
                                 key={f}
                                 onPress={() => setTimeFilter(f as any)}
-                                disabled={!isPremium && isAuthenticated}
-                                className={`px-4 py-2 rounded-lg border ${timeFilter === f ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/10'} ${(!isPremium) ? 'opacity-30' : ''}`}
+                                disabled={isLocked}
+                                className={`px-4 py-2 rounded-lg border ${timeFilter === f ? 'bg-blue-600 border-blue-500' : 'bg-slate-800 border-white/10'} ${isLocked ? 'opacity-30' : ''}`}
                             >
                                 <Text className={`${timeFilter === f ? 'text-white' : 'text-slate-400'} font-bold text-xs`}>
                                     {f === 'ALL' ? 'Tümü 👑' : f === '1Y' ? '1 Yıl' : f === '3Y' ? '3 Yıl' : '7 Yıl'}
