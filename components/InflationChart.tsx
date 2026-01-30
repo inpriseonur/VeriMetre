@@ -195,8 +195,8 @@ export default function InflationChart({ data, loading }: InflationChartProps) {
                     areaChart1={false}
 
                     initialSpacing={10}
-                    spacing={30} // Fit more points
-                    endSpacing={10}
+                    spacing={25} // Fit more points
+                    endSpacing={15}
                     scrollToEnd={true} // Start at the end (newest data)
                     noOfSections={4}
                     yAxisTextStyle={{ color: '#94a3b8', fontSize: 10 }}

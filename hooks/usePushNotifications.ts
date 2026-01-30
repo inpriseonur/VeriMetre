@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 // Configure how notifications should handle when app is in foreground
 Notifications.setNotificationHandler({
@@ -44,22 +44,14 @@ async function registerForPushNotificationsAsync() {
         }
 
         // Get the Expo Push Token
-        // We use the projectId from app config if available
         try {
             const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.expoConfig?.slug;
             const tokenResponse = await Notifications.getExpoPushTokenAsync({
                 projectId,
             });
             token = tokenResponse.data;
-
-            console.log("🚀 ~~~ PUSH TOKEN ~~~ 🚀");
-            console.log(token);
-            console.log("🚀 ~~~~~~~~~~~~~~~~~~~~ 🚀");
-
-            Alert.alert("Token", token);
         } catch (e) {
             console.error('Error fetching push token', e);
-            Alert.alert("Error fetching push token", String(e));
         }
     } else {
         console.log('Must use physical device for Push Notifications');
@@ -69,7 +61,6 @@ async function registerForPushNotificationsAsync() {
 }
 
 export function usePushNotifications() {
-    // Initialize with undefined explicitly to satisfy strict typing if needed, or rely on inference
     const [expoPushToken, setExpoPushToken] = useState<string | undefined>();
     const [notification, setNotification] = useState<Notifications.Notification | undefined>();
 
@@ -78,30 +69,62 @@ export function usePushNotifications() {
     const { session } = useAuth();
 
     useEffect(() => {
-        console.log("🚀 Token Alma İşlemi Başladı (Session Bağımsız)");
-
         registerForPushNotificationsAsync().then(async (token) => {
             setExpoPushToken(token);
 
-            if (token && session?.user?.id) {
-                // Save token to Supabase
-                try {
-                    const { error } = await supabase
-                        .from('user_push_tokens')
-                        .upsert({
-                            user_id: session.user.id,
-                            token: token,
-                            platform: Platform.OS,
-                            last_used_at: new Date().toISOString(),
-                        }, { onConflict: 'user_id, token' });
+            if (token) {
+                const userId = session?.user?.id ?? null;
+                const platform = Platform.OS;
 
-                    if (error) {
-                        console.error('Error saving push token to Supabase:', error);
-                    } else {
-                        console.log('Push token upserted to Supabase for user:', session.user.id);
+                try {
+                    // Check if token exists
+                    const { data: existingTokens, error: fetchError } = await supabase
+                        .from('user_push_tokens')
+                        .select('*')
+                        .eq('token', token);
+
+                    if (fetchError) {
+                        console.error('Error fetching existing token:', fetchError);
+                        return;
                     }
+
+                    if (existingTokens && existingTokens.length > 0) {
+                        // Token exists, update it
+                        const { error: updateError } = await supabase
+                            .from('user_push_tokens')
+                            .update({
+                                user_id: userId,
+                                platform: platform,
+                                last_used_at: new Date().toISOString(),
+                            })
+                            .eq('token', token);
+
+                        if (updateError) {
+                            console.error('Error updating push token:', updateError);
+                        } else {
+                            console.log('Push token updated for user:', userId);
+                        }
+                    } else {
+                        // Token does not exist, insert it
+                        const { error: insertError } = await supabase
+                            .from('user_push_tokens')
+                            .insert({
+                                token: token,
+                                user_id: userId,
+                                platform: platform,
+                                created_at: new Date().toISOString(),
+                                last_used_at: new Date().toISOString(),
+                            });
+
+                        if (insertError) {
+                            console.error('Error inserting push token:', insertError);
+                        } else {
+                            console.log('Push token inserted for user:', userId);
+                        }
+                    }
+
                 } catch (err) {
-                    console.error('Exception saving push token:', err);
+                    console.error('Exception handling push token:', err);
                 }
             }
         });
@@ -122,7 +145,7 @@ export function usePushNotifications() {
                 responseListener.current.remove();
             }
         };
-    }, []);
+    }, [session]); // Dependent on session to re-run logic when login/logout happens
 
     return {
         expoPushToken,
